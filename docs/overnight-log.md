@@ -127,6 +127,16 @@
 - **合并提交**：展示会话的 `ui/self-test.html`、`ui/app.js`、`scripts/accept_ui.py` 与新增
   `docs/decisions/d-motion-and-marks.html`（决策页 D：入场节奏 D-4 + 四处单边色条 D-5）
   **与 `store.py` 的修复一起提交** —— 分开提交会让验收变红。
+  提交前核验：`ui/self-test.html` 在 HEAD / 工作树 / 冻结副本三处哈希一致（`4E12DC6F6CEB`），
+  即**提交进去的就是它验证过的那一版**；工作树无残留（提交 `4623f62`）。
+- **改 `ui/self-test.html` 前必读的三条踩坑**（展示会话实测，别重复踩）：
+  1. `await loadNotebook(nbId)` **之前必须先等页面自己的 bootstrap 落定**（`app.js` 的 bootstrap 也会
+     `loadNotebook(notebooks[0])`）；两个 `loadNotebook` 并发会互相清画布，表现为"点引用后右栏没有高亮行 /
+     空状态没退场"——**这是最像产品缺陷、实则是竞态的假故障**。
+  2. `#nb-list .nb-item.is-active` 切库后**不一定更新**，不要拿它反查当前库；
+     `#src-list .ghost-btn` 出现时机也不稳，`?.click()` 会静默失效然后干等超时。
+  3. 自检是**独立模块**，拿不到 `app.js` 的模块级 `state`（第一版因此报 `state is not defined`）；
+     需要什么就从 `app.js` 的导出拿（如本轮为切库新增的 `loadNotebook`）。
 
 ### 第 33 轮 验证 DSH 客户端插件能否热重载（用户提问）
 - 问题：用户已装上 `dsh-reading-stability`，问"想改的话是热重载吗"。
