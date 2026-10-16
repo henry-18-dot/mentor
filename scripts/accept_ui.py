@@ -530,6 +530,80 @@ def check_hostile(chrome: "cdp.Chrome", base: str, label: str,
     return problems
 
 
+DECISIONS_JS = """(() => {
+  const widths = [...document.querySelectorAll('.d-canvas .canvas__inner')]
+    .map((n) => Math.round(n.getBoundingClientRect().width));
+  const cs = (sel, prop) => { const n = document.querySelector(sel); return n ? getComputedStyle(n)[prop] : null; };
+  const frames = [...document.querySelectorAll('.d-shell')].map((n) => Math.round(n.getBoundingClientRect().width));
+  return {
+    title: document.title,
+    variants: document.querySelectorAll('.variant').length,
+    errors: (window.__ERRORS__ || []).slice(0, 3),
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+    widths, frames,
+    hitMarkNow: (() => { const n = document.querySelector('.v-current .line.is-hit'); return n ? getComputedStyle(n).boxShadow : null; })(),
+    hitMarkNew: (() => { const n = document.querySelector('.v-B2 .line.is-hit, .v-nostripe .line.is-hit, .v-cool .line.is-hit'); return n ? getComputedStyle(n).boxShadow : null; })(),
+    stripeNow: cs('.v-current .src-item__hit', 'borderLeftWidth'),
+    stripeNew: cs('.v-B2 .src-item__hit, .v-nostripe .src-item__hit', 'borderLeftWidth'),
+    asideNow: cs('.v-current .widget--aside .widget__body', 'display'),
+    asideNew: cs('.v-C2 .widget--aside .widget__body, .v-aside .widget--aside .widget__body', 'display'),
+    stylesLoaded: getComputedStyle(document.body).backgroundColor,
+  };
+})()"""
+
+
+def check_decisions(chrome: "cdp.Chrome", base: str, label: str,
+                    shots: Path | None = None) -> list[str]:
+    """审美决策页自身的验收：页面能用、且**变体是真的不同**（不是画出来的对比）。
+
+    为什么要专门验它：决策页是"用户据此拍板"的输入。如果几个变体在浏览器里渲染成同一个样子，
+    用户就是在对着无效信息做决定 —— 那不是观感问题，是正确性问题。
+    踩过的坑：`variant()` 拼 CSS 时少一个 `{`，让后一条规则变成全局选择器，
+    把 B2 的"去条纹"泄漏给了所有变体（当时看页面文字完全看不出来）。
+    """
+    problems: list[str] = []
+    pages = ("index", "a-typography", "b-visual-language", "c-structure")
+    print(f"\n== {label} 审美决策页 ==")
+    for name in pages:
+        sid = chrome.new_page(1440, 1000)
+        chrome.goto(sid, f"{base}/docs/decisions/{name}.html")
+        time.sleep(0.7)
+        data = chrome.evaluate(sid, DECISIONS_JS) or {}
+        tag = f"decisions/{name}"
+        print(f"  {name}: 变体 {data.get('variants')}｜横向溢出 {data.get('overflow')}"
+              f"｜列宽 {data.get('widths')}｜窗口 {data.get('frames')}"
+              f"｜命中竖标 现在={data.get('hitMarkNow')} 新={data.get('hitMarkNew')}")
+        if not str(data.get("title", "")).startswith(("决策", "mentor")):
+            problems.append(f"{tag}: 页面标题不对（{data.get('title')}），可能没加载成功")
+        if data.get("errors"):
+            problems.append(f"{tag}: 页面有未捕获错误 {data['errors']}")
+        if data.get("overflow"):
+            problems.append(f"{tag}: 页面横向溢出 {data['overflow']}px")
+        if name != "index" and (data.get("variants") or 0) < 2:
+            problems.append(f"{tag}: 只有 {data.get('variants')} 个变体，没法做选择")
+
+        # 变体必须真的不同 —— 每个决策页验它自己的关键差异
+        widths = data.get("widths") or []
+        if name == "a-typography":
+            if len(set(widths)) < 3:
+                problems.append(f"{tag}: 三个方案的正文列宽没有区别（{widths}），对比是假的")
+        if name == "b-visual-language":
+            if not data.get("hitMarkNow") or data["hitMarkNow"] == "none":
+                problems.append(f"{tag}: 「现在」的命中竖标没渲染出来（{data.get('hitMarkNow')}）")
+            if data.get("hitMarkNew") not in (None, "none"):
+                problems.append(f"{tag}: 「去条纹」方案仍有竖标（{data.get('hitMarkNew')}）")
+            if data.get("stripeNew") not in (None, "0px"):
+                problems.append(f"{tag}: 「去条纹」方案的左栏片段仍有 {data.get('stripeNew')} 竖线")
+        if name == "c-structure":
+            if data.get("asideNow") == data.get("asideNew"):
+                problems.append(f"{tag}: aside 收起的方案和现状一样（{data.get('asideNow')}）")
+            if 420 not in (data.get("frames") or []):
+                problems.append(f"{tag}: 窄屏方案没有用 420px 的窄窗口（{data.get('frames')}）")
+        if shots is not None:
+            chrome.screenshot(sid, shots / f"decision-{name}.png")
+    return problems
+
+
 def style_evidence(chrome: "cdp.Chrome", sid: str, label: str) -> list[str]:
     """把"模型看图说的问题"落到计算样式上：模型说没修，就量给它看。
 
@@ -784,7 +858,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8484)
     parser.add_argument("--root", default=r"D:\CS336")
     parser.add_argument("--db", default=None, help="默认用临时库，跑完即弃")
-    parser.add_argument("--case", default="all", choices=["all", "index", "interactive", "hostile", "pdf"])
+    parser.add_argument("--case", default="all", choices=["all", "index", "interactive", "hostile", "pdf", "decisions"])
     parser.add_argument("--themes", default="dark,light",
                         help="要验收的配色方案，逗号分隔（默认两种都跑）")
     args = parser.parse_args()
@@ -806,6 +880,23 @@ def main() -> int:
         return 2
 
     problems: list[str] = []
+    # 决策页在 docs/decisions/ 下，而 mentor 的服务器只服务 ui/：给它们开一个只读静态服务，
+    # 而不是往应用里加一条只给开发用的路由。
+    docs_base = base
+    docs_srv = None
+    if args.case in ("all", "decisions"):
+        from functools import partial
+        from http.server import SimpleHTTPRequestHandler
+
+        class _Quiet(SimpleHTTPRequestHandler):
+            def log_message(self, *args) -> None:
+                pass
+
+        docs_srv = ThreadingHTTPServer(("127.0.0.1", 0), partial(_Quiet, directory=str(PROJECT)))
+        docs_srv.daemon_threads = True
+        threading.Thread(target=docs_srv.serve_forever, daemon=True).start()
+        docs_base = f"http://127.0.0.1:{docs_srv.server_address[1]}"
+
     chrome = cdp.Chrome(1440, 900)
     try:
         # 顺序很重要：index 轮必须全部跑完再跑 interactive 轮。
@@ -841,6 +932,8 @@ def main() -> int:
                     shot = shots / f"{tag}.png"
                     chrome.screenshot(sid, shot)
                     problems += verify_theme_pixels(shot, theme, tag)
+        if args.case in ("all", "decisions"):
+            problems += check_decisions(chrome, docs_base, "decisions", shots=shots)
         if args.case in ("all", "pdf"):
             problems += check_pdf(chrome, base, "pdf", shot=shots / "pdf-1440.png")
         if args.case in ("all", "hostile"):
@@ -849,6 +942,9 @@ def main() -> int:
         chrome.close()
         httpd.shutdown()
         httpd.server_close()
+        if docs_srv is not None:
+            docs_srv.shutdown()
+            docs_srv.server_close()
         store.close()
         tmpdir.cleanup()
 

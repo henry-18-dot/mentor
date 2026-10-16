@@ -62,10 +62,10 @@
 - 正文/讲义代码的视觉优先级最高（CC 总评）；是否默认收起 `aside` 组件；三栏是否在窄屏变两栏。
 
 ### 新队列（P4 之外，可验收、非结构性；P1–P3 已清空后启用）
-- [ ] **审美决策页（今晚第一件事）**：把 P4 三条 + 现有观感的候选方案做成 `runs/decisions/*.html`
+- [x] **审美决策页（已完成：`docs/decisions/` 四页 + `--case decisions`，等用户选）**：把 P4 三条 + 现有观感的候选方案做成 `runs/decisions/*.html`
   决策页（每页同屏对比 2~3 方案、标取舍、可离线打开），请用户在页面上选；
   选完再改代码，并同步更新验收断言。**不要先改后问。**
-- [ ] **先例调研（borrow prior art）**：读 Anthropic `pptx` skill 的版式/层级做法、`dsh-replica` 的
+- [x] **先例调研（已完成：`docs/prior-art.md`）**：读 Anthropic `pptx` skill 的版式/层级做法、`dsh-replica` 的
   设计令牌与壳体结构、`dsh-reading-stability/docs/prior-art.md`，产出一份
   `docs/prior-art.md`（每条：来源链接 + 借什么思想 + 怎么落到 mentor + 代价）。
 - [ ] **`dsh-reading-stability` 安装确认**（用户问过"为什么没看到"）：它已建好但**未注册进 desktop
@@ -84,6 +84,39 @@
   验收：6 条接口测试 + 自检 2 条断言（见第 16 轮）。
 
 ## 轮次记录
+
+### 第 31 轮 先例调研 + 审美决策页（用户新规则的第一轮）
+- 用户 2026-10-16 上午新增两条规则（已写进「自律规则」第 5、6 条）：**重大审美决策先出展示页**、
+  **借鉴已有优秀实践**。本轮是这两条的第一次执行。
+- **先例调研**：产出 `docs/prior-art.md`。读到的原文并借用的：
+  - Anthropic 公开的 `pptx` skill（[SKILL.md](https://raw.githubusercontent.com/anthropics/skills/main/skills/pptx/SKILL.md)，实测 raw 链接 200）：
+    配色要为题材而选、主次不能平均、**绝不用边缘色条与标题下划线**（点名这是「AI 生成的标志」）、
+    别默认奶油米色底、字号对比别抠、间距一致且留白、首轮渲染一定有真问题要重新看图。
+  - 本机 `dsh-reading-stability/docs/prior-art.md`（另一个对话 38 小时前的成果）：滚动锚定在「钉底+追加」
+    场景**有害**、增量 markdown 块级记忆化、`content-visibility`、WCAG 1.4.8 的可引用阈值。
+  - 本机 `dsh-replica`：壳体/令牌先复刻再减法、动效只做一次性。
+- **据此落地的客观修复**（不属观感、故直接改）：画布加 `overflow-anchor: none`
+  —— `app.js` 自己就在做「接近底部才自动滚动」，而 W3C/MDN 与内核实践都指出这种场景下原生锚定有害。
+  实测计算样式已生效（`none`）。
+- **WCAG 1.4.8 独立核算**（真浏览器读计算样式）：行长 **44.8 CJK 字**（建议 ≤40）、行距 1.70×（达标）、
+  段距 **0.30× 行距**（建议 ≥1.5×）、200% 放大无横向滚动（达标）→ 前两项是观感问题，进决策页。
+- **决策页**：`scripts/build_decisions.py` 生成 `docs/decisions/{index,a-typography,b-visual-language,c-structure}.html`
+  （零依赖、可离线双击打开、引用 mentor **真实** `ui/styles.css` 与组件类，所以变体看到的就是实现后的样子）。
+  每个决策 2~3 个方案 + 取舍表 + 「选它会发生什么（代码与验收层面）」 + 我的建议与理由。
+- **验收扩容**：`accept_ui.py` 新增 **`--case decisions`**（第 10 类检查）。它不只看页面能不能打开，
+  还断言**变体必须真的不同**：A 页三个正文列宽必须互不相同、B 页「现在有竖标/新方案无竖标」、
+  C 页 aside 收起与现状不同、窄屏方案必须用 420px 窗口。实测：
+  `a:[760,668,700]｜b: 竖标 4px inset→none、左栏竖线 2px→0px｜c: aside block→none、窗口 [1440,1440,420]`。
+- **过程中修掉自己的两个 bug**（都是真浏览器复核才发现的，各留了一条回归测试）：
+  1. `variant()` 拼 CSS 少一个 `{` → 后续规则变**全局选择器**，B2 的「去条纹」泄漏到所有变体
+     （页面文字完全看不出来）；测试 `test_decision_pages.test_variant_css_is_scoped` 现在要求
+     变体内每条规则都挂在 `.v-<code>` 下。
+  2. 决策页窗口 1440 宽时，grid 项的 `min-width:auto` 把整页撑到 1606px（横向滚动）→ 改
+     `grid-template-columns: minmax(0,1fr)` + `min-width: 0`；验收里断言页面零横向溢出。
+- 证据：`python -m unittest discover -s tests -t .` → **341 tests OK**（333+8）；
+  `python scripts/accept_ui.py` → **十类全绿**（原始输出 `runs/ui/accept-r31.txt`；
+  决策页截图 `runs/ui/decision-*.png`）。
+- **下一步：等用户在决策页上选 A/B/C**，选完再改代码并同步断言（按规则第 5 条，不先改后问）。
 
 ### 第 30 轮 上传 GitHub（用户指令）
 - 本机状况：`git` 2.51.2 有；`gh` **没装**；`winget` 不可用；全局 git 身份是 `henry-18-dot`；

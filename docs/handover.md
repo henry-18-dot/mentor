@@ -6,7 +6,7 @@
 
 - 协议版本：`PROTOCOL_VERSION = "0.1"`（`mentor/protocol.py`）
 - 组件类型：**17** 种；槽位：**4** 类（primary / support / evidence / aside）
-- 测试：**333** 条，`python -m unittest discover -s tests -t .` 全绿
+- 测试：**341** 条，`python -m unittest discover -s tests -t .` 全绿
 - 界面验收：`python scripts/accept_ui.py` 全绿。配色与视口的实际组合：**index 页两种配色 × 两种视口都跑；
   interactive 轮两种配色只在 1440 跑，390 只跑第一种配色**（结论与配色无关，省一半时间）。
 - 规模：核心代码 42 个文件 ≈ **12,946 行**（`mentor/*.py` + `mentor/llm/*.py` + `ui/*.js|css` + `scripts/*.py` + `tests/*.py`）
@@ -165,4 +165,6 @@ python -m mentor.cli serve --port 8484            # 打开 http://127.0.0.1:8484
 - [docs/api.md](api.md)：HTTP 接口（含 SSE 事件序列）
 - [docs/performance.md](performance.md)：性能基线与复现
 - [docs/kimi-review.md](kimi-review.md)：历次外观评审与被驳回的建议（含证据）
-- [docs/overnight-log.md](overnight-log.md)：逐轮改动与证据台账（16 轮）
+- [docs/overnight-log.md](overnight-log.md)：逐轮改动与证据台账（31 轮）
+- [docs/prior-art.md](prior-art.md)：先例调研（借了什么、出处、代价）
+- [docs/decisions/](decisions/index.html)：审美决策页（每个决策 2~3 个方案，用真实令牌渲染）
