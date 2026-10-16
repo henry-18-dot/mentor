@@ -97,12 +97,19 @@ class Store:
         raise RuntimeError("无法创建笔记本：id 连续冲突")
 
     def list_notebooks(self) -> list[dict]:
+        """按创建时间倒序列出笔记本。
+
+        **必须带 rowid 兜底**：`created_at` 只精确到秒，同秒创建的多本（验收脚本就是这么干的）
+        在只按 `created_at` 排序时次序**不确定** —— SQLite 可以任意返回。
+        实测后果：验收的 PDF 笔记本排在前面时，`ui/self-test.html` 拿不到讲义笔记本，
+        `/api/sources?highlight=` 断言随机失败，整个 `accept_ui.py` 退出码 1。
+        """
         with self._lock:
             rows = self._db.execute(
                 """SELECT n.id, n.title, n.created_at, n.meta,
                           (SELECT COUNT(*) FROM notebook_sources s WHERE s.notebook_id = n.id) AS source_count,
                           (SELECT COUNT(*) FROM turns t WHERE t.notebook_id = n.id) AS turn_count
-                   FROM notebooks n ORDER BY n.created_at DESC"""
+                   FROM notebooks n ORDER BY n.created_at DESC, n.rowid DESC"""
             ).fetchall()
         return [
             {"id": r["id"], "title": r["title"], "created_at": r["created_at"],
