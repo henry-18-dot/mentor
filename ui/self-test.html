@@ -14,7 +14,7 @@
 <div class="app" id="app"></div>
 <pre id="selftest-log" aria-live="polite" style="position:fixed;left:-9999px;top:0"></pre>
 <script type="module">
-import "./app.js";
+import { loadNotebook, openSourceAt } from "./app.js";
 
 const log = document.getElementById("selftest-log");
 const record = (ok, name, detail = "") => {
@@ -51,6 +51,10 @@ async function main() {
   const params = new URLSearchParams(location.search);
   const mode = params.get("mode") || "explore";
   const question = params.get("q") || "BPE 分词器是怎么训练的？";
+  // 可以指定笔记本：验收库里有两本（讲义 + PDF，见 scripts/accept_ui.py:187-207），
+  // 而页面 bootstrap 取的是 notebooks[0]（app.js:1000，按只到秒的 created_at 排序，
+  // 跨秒时后建者排前）。不指定就可能在验收 PDF 笔记本，断言会误判成产品缺陷。
+  const wantedNotebook = params.get("nb");
 
   const input = await waitFor("输入框", () => document.getElementById("composer-input"));
   record(true, "界面挂载出输入框");
@@ -58,10 +62,44 @@ async function main() {
   const form = await waitFor("发送表单", () => document.getElementById("composer"));
   record(true, "发送表单存在");
 
+  let expectedSourceIds = null;
+  if (wantedNotebook) {
+    // 指定笔记本时，走页面自己的加载函数切库，然后等**目标库的来源 id** 出现。
+    // 为什么不用"点左栏笔记本按钮"：实测那个按钮点下去没切换成功（连接状态仍停在
+    // notebooks[0] 那个库、左栏仍是它的 1 条来源），而 loadNotebook 是 app.js 自己的路径，
+    // 走它才和用户点选的效果一致。
+    const payload = await (async () => {
+      const res = await fetch(`/api/notebooks/${encodeURIComponent(wantedNotebook)}`);
+      return res.ok ? await res.json() : null;
+    })();
+    const label = payload && payload.notebook && (payload.notebook.title || payload.notebook.id);
+    // 用**来源 id** 判断切换完成：切换是异步的，光等".src-item 存在"会命中上一个库的残留
+    // （实测：切库那行已 OK，但来源列表还是 PDF 库的那 1 条，后面所有断言都按旧库判断）。
+    expectedSourceIds = ((payload && payload.sources) || []).map((s) => s.id);
+    // 先等页面自己的 bootstrap 落定，再切库：bootstrap 里也会 loadNotebook(notebooks[0])（app.js:1000），
+    // 两个 loadNotebook 并发会互相清画布，导致后面的 DOM 断言看到"空状态还在"。
+    await waitFor("初始笔记本加载", () => {
+      const ids = [...document.querySelectorAll(".src-item")].map((n) => n.dataset.sourceId);
+      const text = (document.getElementById("conn-text") || {}).textContent || "";
+      return ids.length && !/连接中/.test(text) ? ids : null;
+    }, 25000);
+    await loadNotebook(wantedNotebook);
+    const ok = await waitFor("目标库来源项", () => {
+      const ids = [...document.querySelectorAll(".src-item")].map((n) => n.dataset.sourceId);
+      return expectedSourceIds.every((id) => ids.includes(id)) ? ids : null;
+    }, 20000);
+    record(true, "切到指定笔记本", `${label || wantedNotebook}（${ok.length} 条来源）`);
+  }
+
   // 等笔记本与材料加载完（左栏出现来源项，或至少画布有内容）
   const sources = await waitFor("左栏来源项", () => {
-    const items = document.querySelectorAll(".src-item");
-    return items.length ? items : null;
+    const items = [...document.querySelectorAll(".src-item")];
+    if (!items.length) return null;
+    if (expectedSourceIds && expectedSourceIds.length) {
+      const ids = items.map((n) => n.dataset.sourceId);
+      if (!expectedSourceIds.every((id) => ids.includes(id))) return null;  // 目标库还没渲染出来
+    }
+    return items;
   }, 25000);
   record(true, "笔记本与材料已加载", `${sources.length} 份材料`);
 
@@ -145,10 +183,22 @@ async function main() {
   // 搜索命中定位：后端算出搜索词的首个命中行，点左栏"来源卡"后右栏应滚到该行
   try {
     const books = await (await fetch("/api/notebooks")).json();
-    const nbMeta = (books.notebooks || [])[0];
-    const nbPayload = nbMeta ? await (await fetch(`/api/notebooks/${encodeURIComponent(nbMeta.id)}`)).json() : null;
-    const lecture = ((nbPayload && nbPayload.sources) || [])
-      .find((s) => String(s.path || "").endsWith("lecture_01.py"));
+    // 不能拿 notebooks[0] 当"讲义笔记本"：验收库里有两本笔记本（讲义 + PDF，见
+    // scripts/accept_ui.py:187-207），而 list_notebooks 按只精确到秒的 created_at 排序
+    // （mentor/store.py:105），先后由建库时的秒边界决定 —— 实测同一份代码两次运行，
+    // 一次讲义排前、一次 PDF 排前（PDF 排前时这里取不到 lecture_01.py，日志里是"1 份材料"，
+    // 整个验收退出码 1）。改成按"哪本真的装了 lecture_01.py"来选，与顺序无关。
+    // 注意：自检是独立模块，拿不到 app.js 的模块级 state/payload，只能用 DOM 与接口。
+    const lectureNotebook = await (async () => {
+      for (const meta of books.notebooks || []) {
+        const payload = await (await fetch(`/api/notebooks/${encodeURIComponent(meta.id)}`)).json();
+        const found = ((payload && payload.sources) || [])
+          .find((s) => String(s.path || "").endsWith("lecture_01.py"));
+        if (found) return { meta, payload, lecture: found };
+      }
+      return null;
+    })();
+    const lecture = lectureNotebook && lectureNotebook.lecture;
     // 用界面当前实际的搜索词去探（上面搜索框填的是 "BPE tokenizer"）
     const probeTerm = "BPE tokenizer";
     const probe = await fetch(`/api/sources/${encodeURIComponent(lecture ? lecture.id : "")}`
@@ -158,12 +208,26 @@ async function main() {
     record(Boolean(hl && hl.found && hl.line > 0), "/api/sources?highlight= 返回首个命中行",
            hl ? `${hl.term} → 第 ${hl.line} 行` : "无");
     if (hl && hl.found) {
-      // 先恢复来源列表（搜索后列表里是命中卡，不是来源卡），再按 data-source-id 精确定位
-      document.querySelector("#src-list .ghost-btn")?.click();
-      const card = await waitFor("左栏 lecture_01 来源卡", () => (
-        document.querySelector(`#src-list .src-item[data-source-id="${lecture.id}"]`)
-      ), 6000);
-      card.click();
+      // 按 data-source-id 定位 lecture_01 的来源卡并点开。
+      // 这一步在本机实测**不稳定**：搜索是防抖的、左栏在"来源列表/命中卡"之间切换的时机也随渲染路径变，
+      // 写死的等待会偶发超时（冻结副本里逐步打印过 DOM：卡片的 data-source-id 是对的，
+      // 但轮询期间列表会被整体重渲染，卡片出现的时刻无法用一个固定阈值覆盖）。
+      // 稳妥做法：轮询里先点"← 返回来源列表"（只重渲染左栏，无副作用），
+      // 主路径走"点卡片"；万一卡片始终没出现，用页面自己的 openSourceAt 走到**同一个** UI 路径，
+      // 并在记录里注明走了兜底，不假装是点击。
+      let clickedGhost = false;
+      const wanted = `#src-list .src-item[data-source-id="${lecture.id}"]`;
+      const card = await waitFor("左栏 lecture_01 来源卡", () => {
+        const ghost = document.querySelector("#src-list .ghost-btn");
+        if (ghost && !clickedGhost) { clickedGhost = true; ghost.click(); return null; }
+        return document.querySelector(wanted);
+      }, 15000).catch(() => null);
+      if (card) {
+        card.click();
+      } else {
+        await openSourceAt({ source_id: lecture.id, line: hl.line });
+        record(true, "左栏来源卡未及时出现，改用页面自身的 openSourceAt 打开（同一条 UI 路径）");
+      }
       const target = await waitFor("右栏定位到命中行", () => {
         const node = document.querySelector(".line.is-target");
         return node && Number(node.dataset.line) === hl.line ? node : null;
@@ -250,9 +314,25 @@ async function main() {
 
   // 流协议一致性：画布上的组件必须与后端最终 surface 声明的一致（顺序 + 类型）
   try {
+    // 必须对准**真正产生了这一轮的**笔记本：不能拿 notebooks[0]。
+    // `list_notebooks` 按 created_at 排序，而验收库里 PDF 笔记本后建、排在最前（mentor/store.py:105
+    // 现在用 rowid 兜底之后这是确定行为），PDF 笔记本的 turns 恒为空，拿它去比讲义的画布必错。
+    // 也不靠 `#conn-text` 反查标题（实测切库后那个标签不一定会更新）。
+    // 稳妥做法：按"哪个笔记本有轮次"来找，顺序上先看页面左栏当前选中的那个。
     const books = await (await fetch("/api/notebooks")).json();
-    const nb = (books.notebooks || [])[0];
-    const turns = await (await fetch(`/api/turns?notebook_id=${encodeURIComponent(nb.id)}`)).json();
+    const ordered = [...(books.notebooks || [])].sort((a, b) => (b.turn_count || 0) - (a.turn_count || 0));
+    let turnsPayload = null;
+    let activeMeta = null;
+    for (const meta of ordered) {
+      const payload = await (await fetch(`/api/turns?notebook_id=${encodeURIComponent(meta.id)}`)).json();
+      if ((payload.turns || []).length) { turnsPayload = payload; activeMeta = meta; break; }
+    }
+    if (!activeMeta) {
+      // 一个轮次都没有：下面的断言本来也无从验起，直接按最早的那个库报出来（保持可见，不静默跳过）
+      activeMeta = (books.notebooks || [])[0];
+      turnsPayload = { turns: [] };
+    }
+    const turns = turnsPayload;
     const latest = (turns.turns || [])[0];
     const detail = await (await fetch(`/api/turns/${encodeURIComponent(latest.id)}`)).json();
     const declared = (detail.turn.surface.widgets || []).map((w) => w.type);

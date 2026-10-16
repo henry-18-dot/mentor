@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>mentor · 决策页 D：动效节奏与四栏标记</title>
+<link rel="stylesheet" href="../../ui/styles.css">
+<style>
+  /* 与 index/a/b/c 同一套外壳：不复制 .app 网格，只借它的类与令牌渲染"被评估的观感"。 */
+  body { margin: 0; padding: 28px 24px 72px; background: var(--paper); color: var(--ink); }
+  .wrap { max-width: 1560px; margin: 0 auto; }
+  .kicker { font-size: var(--fs-xs); color: var(--ink-2); letter-spacing: .04em; text-transform: uppercase; }
+  h1 { font-size: 26px; line-height: 1.3; margin: 6px 0 10px; }
+  h2 { font-size: 18px; margin: 36px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  h3 { font-size: 15px; margin: 22px 0 8px; }
+  p, li { font-size: 14.5px; line-height: 1.75; }
+  .lede { font-size: 15.5px; line-height: 1.8; max-width: 82ch; color: var(--ink); }
+  .muted { color: var(--ink-2); }
+  .measured { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 6px; padding: 0; list-style: none; }
+  .measured li { flex: 1 1 190px; background: var(--surface); border: 1px solid var(--line);
+                 border-radius: var(--r-md); padding: 10px 12px; font-size: 13px; line-height: 1.6; }
+  .measured b { font-size: 15px; }
+  .variants { display: grid; grid-template-columns: minmax(0,1fr); gap: 22px; margin-top: 12px; }
+  .variant { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+             padding: 14px 16px 18px; min-width: 0; }
+  .variant__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .variant__code { font-family: var(--font-mono); font-size: 13px; color: var(--accent-ink);
+                   border: 1px solid var(--line-strong); border-radius: var(--r-pill); padding: 1px 8px; }
+  .variant__name { font-size: 15px; font-weight: 650; }
+  .variant__desc { font-size: 13.5px; line-height: 1.7; color: var(--ink-2); max-width: 90ch; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 4px; font-size: 13.5px; }
+  th, td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; line-height: 1.6; }
+  th { background: var(--surface-2); font-weight: 650; }
+  code { font-family: var(--font-mono); font-size: .92em; background: var(--surface-2);
+         border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .how { background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--r-md);
+         padding: 12px 14px; font-size: 13.5px; line-height: 1.7; }
+  .nav { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 10px; font-size: 13.5px; }
+  .nav a { color: var(--accent-ink); }
+  /* 本页的"舞台"：用真实 .widget 与真实令牌渲染，动效参数由 .stage--X 控制 */
+  .stage { margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r-md);
+           background: var(--paper); padding: 14px; overflow: hidden; }
+  .stage__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .stage .widget { margin: 0; }
+  .replay { display: flex; gap: 8px; align-items: center; margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+  .replay button { font: inherit; padding: 4px 12px; border-radius: var(--r-pill);
+                   border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+                   cursor: pointer; }
+  .replay button:hover { background: var(--surface-2); }
+  /* A：现状——逐个 40ms 入场 */
+  .stage--a .widget { animation: mc-in 200ms cubic-bezier(.2,0,0,1) both; }
+  /* B：错峰收敛——前 6 个 40ms，之后 12ms */
+  .stage--b .widget { animation: mc-in 200ms cubic-bezier(.2,0,0,1) both; }
+  /* C：一次性入场——同一帧全部起播，位移略小 */
+  .stage--c .widget { animation: mc-in-fast 180ms cubic-bezier(.2,0,0,1) both; }
+  @keyframes mc-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes mc-in-fast { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .stage .widget { animation: none !important; }
+  }
+  /* 单边色条对照：命中行竖标 / 左栏命中片段竖线 / 模式下划线 / 目录项竖线 */
+  .marks { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .mk { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px; }
+  .mk h4 { margin: 0 0 8px; font-size: 14px; }
+  .mk .now { border-left: 4px solid var(--accent); padding-left: 8px; }
+  .mk .alt { border-left: 0; padding-left: 0; background: var(--surface-2); border-radius: 4px; padding: 4px 8px; }
+  .mk .alt2 { border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
+  .mk .alt3 { box-shadow: inset 2px 0 0 0 var(--accent); padding-left: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">mentor · 决策页 D</div>
+  <h1>动效节奏（D-4）与四处单边色条标记（D-5）</h1>
+  <p class="lede">本页是新加的一张决策页，按项目自律规则第 5 条制作：<b>凡是要改变观感/交互结构的选择，
+  不只在对话里描述、也不直接实现</b>，而是把候选方案同屏渲染出来、标注取舍与代价，由你选。
+  下面每个方案都用 mentor <b>真实的类与令牌</b>渲染（<code>.widget</code>、<code>--accent</code>、
+  <code>--surface</code> 等），所以看到的就是改完的样子；动效参数是本页临时定义的，
+  <b>在选之前不改 <code>ui/styles.css</code></b>。</p>
+
+  <h2 id="d4">D-4 组件入场的节奏：逐个 vs 收敛 vs 一次性</h2>
+  <p class="lede">背景是现场测量。真实提问路径（离线 provider）每轮 4~6 个组件，逐个入场；离线预览页
+  （fixtures 18 个组件）在 1440×900 下回放，逐帧采样得到这些数字：</p>
+  <ul class="measured">
+    <li><b>18</b> 同帧 <code>widget-in</code> 峰值（不是 18 个"同时开始"，是逐个插入后并发堆叠）</li>
+    <li><b>40 ms</b> 组件之间的间隔（<code>app.js:1254-1257</code> 的 <code>await wait(40)</code>）</li>
+    <li><b>200 ms</b> 每条入场动画时长（<code>styles.css:829</code>）</li>
+    <li><b>42.2 / 68.9 ms</b> 深色 / 浅色的最长帧；&gt;50ms 掉帧 0 / 4 个</li>
+    <li><b>99.7%</b> 真实提问路径的帧落在一个垂直同步内（四组配置）</li>
+  </ul>
+  <p class="lede muted">结论：这不是"卡"的问题（真实路径测不到掉帧），是<b>观感</b>问题——
+  18 条 200 ms 动画错峰堆叠，读起来像"涓流"而不是"一次入场"。下面是三个候选，点按钮可重播。</p>
+
+  <div class="variants">
+    <section class="variant">
+      <div class="variant__head">
+        <span class="variant__code">A</span><span class="variant__name">保持现状：逐个入场，间隔 40 ms</span>
+      </div>
+      <p class="variant__desc"><b>做法</b>：不动。<br>
+      <b>选它会发生什么</b>：18 个组件入场总时长约 <code>18×40 + 200 ≈ 920 ms</code>；
+      语义上它是"流式抵达"（真的在逐条产出），不是加载动画。真实提问路径每轮只有 4~6 个组件，
+      观感是"一条条来"，与产品主张一致。<br>
+      <b>代价</b>：组件多的时候（预览页/未来的历史回填）尾部等待感明显。</p>
+      <div class="stage stage--a" data-replay>
+        <div class="stage__row">
+          <article class="widget"><div class="widget__body"><p>组件 1 · 正文</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 2 · 概念图</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 3 · 引用</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 4 · 速查表</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 5 · 来源</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 6 · 追问</p></div></article>
+        </div>
+        <div class="replay"><button type="button" data-replay-btn>重播入场</button><span>间隔 40 ms</span></div>
+      </div>
+    </section>
+
+    <section class="variant">
+      <div class="variant__head">
+        <span class="variant__code">B</span><span class="variant__name">收敛：前 6 个 40 ms，之后 12 ms</span>
+      </div>
+      <p class="variant__desc"><b>做法</b>：把间隔做成自适应——前几个组件仍留 40 ms 让人看清"一条条抵达"，
+      之后收窄到 12 ms，让整批在 <code>≈ 6×40 + 12×12 + 200 ≈ 584 ms</code> 内收完。<br>
+      <b>选它会发生什么</b>：既保留"流式抵达"的开头，又不让尾部拖长；组件多时改善最明显。
+      需要动 <code>app.js</code> 的 <code>wait(40)</code> 一处，改成按序号取值。<br>
+      <b>代价</b>：语义上"间隔"不再恒定；如果将来做逐字流入正文，这个间隔要和它一起重新定。</p>
+      <div class="stage stage--b" data-replay>
+        <div class="stage__row">
+          <article class="widget"><div class="widget__body"><p>组件 1 · 正文</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 2 · 概念图</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 3 · 引用</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 4 · 速查表</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 5 · 来源</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 6 · 追问</p></div></article>
+        </div>
+        <div class="replay"><button type="button" data-replay-btn>重播入场</button><span>前 6 个 40 ms，之后 12 ms</span></div>
+      </div>
+    </section>
+
+    <section class="variant">
+      <div class="variant__head">
+        <span class="variant__code">C</span><span class="variant__name">一次性入场：同一帧全部起播，位移收到 4 px</span>
+      </div>
+      <p class="variant__desc"><b>做法</b>：拿掉组件之间的等待，全部同帧入场；位移从 8 px 收到 4 px、
+      时长 200→180 ms，让"整块浮上来"更像一次完成。<br>
+      <b>选它会发生什么</b>：最快、最"整"；代价是丢掉"逐条抵达"的语义——
+      用户看不到内容正在生成，只能等它一次性出现。<b>与产品主张冲突</b>（本项目的卖点之一就是流式抵达）。<br>
+      <b>代价</b>：同帧起播 18 条动画在浅色下实测出现过 4 个 &gt;50 ms 的帧（深色 0 个），
+      这是三个方案里唯一有实测掉帧的。</p>
+      <div class="stage stage--c" data-replay>
+        <div class="stage__row">
+          <article class="widget"><div class="widget__body"><p>组件 1 · 正文</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 2 · 概念图</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 3 · 引用</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 4 · 速查表</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 5 · 来源</p></div></article>
+          <article class="widget"><div class="widget__body"><p>组件 6 · 追问</p></div></article>
+        </div>
+        <div class="replay"><button type="button" data-replay-btn>重播入场</button><span>同帧起播，180 ms / 4 px</span></div>
+      </div>
+    </section>
+  </div>
+
+  <table>
+    <thead><tr><th>方案</th><th>18 组件入场总时长</th><th>同帧并发峰值</th><th>实测掉帧（浅色）</th>
+    <th>要动哪里</th><th>保留"流式抵达"语义</th></tr></thead>
+    <tbody>
+      <tr><td><b>A</b> 现状</td><td>≈920 ms</td><td>18（逐个堆叠）</td><td>0 个 / 4 个（深/浅）</td>
+      <td>不动</td><td>是</td></tr>
+      <tr><td><b>B</b> 收敛</td><td>≈584 ms</td><td>18（堆叠更快）</td><td>待测</td>
+      <td><code>app.js:1254-1257</code></td><td>是（开头保留）</td></tr>
+      <tr><td><b>C</b> 一次性</td><td>≈180 ms</td><td>18（同一帧）</td><td>4 个</td>
+      <td><code>app.js</code> + <code>styles.css:829</code></td><td><b>否</b></td></tr>
+    </tbody>
+  </table>
+  <p class="how"><b>我的倾向（供参考，不代替你的选择）</b>：<b>B</b>。
+  理由是它与"流式抵达"的产品主张不冲突，又能把尾部等待压掉约 1/3；真要量化的话，
+  改完我会用同一套脚本重跑 <code>batch-entry.json</code>，比较"入场总时长/同帧峰值/最长帧"三项。
+  如果你认为"逐条抵达"本身就是产品感的一部分，那 <b>A</b> 也是一次有依据的选择。</p>
+
+  <h2 id="d5">D-5 四处单边色条标记：留、改、还是去</h2>
+  <p class="lede">先例调研借来的原则是「<b>绝不用标题下划线 / 卡片单边色条</b>」（Anthropic 的 pptx skill）；
+  而 mentor 现有 4 处单边色条做"位置指示"：命中行 4px 竖标、左栏命中片段 2px 竖线、
+  选中模式的下划线、目录项 3px 竖线。这不是"好看不好看"，而是<b>指示手段要不要换一套</b>——
+  换掉就得给这四种状态各找一个替代视觉，否则可读性会降。</p>
+  <div class="marks">
+    <div class="mk">
+      <h4>命中行（右栏原文）</h4>
+      <p class="now">现在：4px 竖标 + 底色</p>
+      <p class="alt">替代 1：整行浅底色（去掉竖标）</p>
+      <p class="alt3">替代 2：inset 内阴影（视觉上更"内嵌"，不占布局）</p>
+      <p class="muted">实测：命中竖标 <code>rgb(127,168,212) 4px 0 0 0 inset</code>（验收脚本会断言它）</p>
+    </div>
+    <div class="mk">
+      <h4>左栏命中片段</h4>
+      <p class="now">现在：2px 竖线 + <code>line-clamp:2</code></p>
+      <p class="alt">替代：左侧留白 + 加粗首行</p>
+      <p class="muted">实测：<code>border-left 2px</code>，行夹 2 行（验收脚本会断言它）</p>
+    </div>
+    <div class="mk">
+      <h4>选中的模式 chip</h4>
+      <p class="now">现在：下划线（inset 0 -2px）</p>
+      <p class="alt2">替代表达：加粗 + 底色</p>
+      <p class="muted">实测：<code>下划线 rgb(127,168,212) 0px -2px 0px 0px inset</code>；chip 高度 34px（点击目标 ≥32px 达标）</p>
+    </div>
+    <div class="mk">
+      <h4>目录 / 分组项</h4>
+      <p class="now">现在：3px 竖线</p>
+      <p class="alt3">替代：inset 内阴影</p>
+      <p class="muted">先例调研原文列出的第 4 处</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>选择</th><th>会发生什么</th><th>代价</th></tr></thead>
+    <tbody>
+      <tr><td><b>留</b>（推荐）</td><td>不动；这四种状态都靠"位置感"识别，竖标/竖线是最省版面的一类指示</td>
+      <td>与借来的原则不一致，需要在文档里写明"为什么不照搬"</td></tr>
+      <tr><td><b>改</b>（只改命中行与左栏）</td><td>改用底色/内阴影，视觉更"柔和"</td>
+      <td><b>会破坏既有验收断言</b>（<code>accept_ui.py</code> 的样式证据断言了这两处的
+      <code>border-left</code> 与命中竖标），必须同步改断言；可读性需重测对比度</td></tr>
+      <tr><td><b>去</b>（全部去掉）</td><td>最贴原则</td><td>四种状态失去位置指示，需要另做替代视觉，工作量最大</td></tr>
+    </tbody>
+  </table>
+  <p class="how"><b>我的倾向</b>：<b>留</b>，并在 <code>docs/prior-art.md</code> 里补一句"为什么不照搬"。
+  理由是这四处都是<b>位置指示</b>而不是"装饰性色条"，先例针对的是后者；但这条属观感，最终由你定。</p>
+
+  <h2 id="others">另外三条待拍板（D-1 ~ D-3，细节见既有决策页）</h2>
+  <p class="lede">这三条在 <a href="./index.html">决策索引</a> 与 <code>a-typography.html</code> /
+  <code>b-visual-language.html</code> / <code>c-structure.html</code> 里已经有同屏对比，这里只做索引，不重复渲染。</p>
+  <table>
+    <thead><tr><th>编号</th><th>决策</th><th>看哪一页</th></tr></thead>
+    <tbody>
+      <tr><td>D-1</td><td>正文与讲义代码的视觉优先级</td><td><code>a-typography.html</code> / <code>c-structure.html</code></td></tr>
+      <tr><td>D-2</td><td>是否默认收起 <code>aside</code> 类组件（闪卡/自测/追问）</td><td><code>c-structure.html</code></td></tr>
+      <tr><td>D-3</td><td>窄屏是否从三栏改两栏</td><td><code>c-structure.html</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="how">怎么在这个页面上留意见</h2>
+  <div class="how">
+    <p>这一页是 <b>离线 HTML</b>，没有后端，所以"选择"不写进文件。请用下面任一方式给我结论：</p>
+    <ol>
+      <li>直接在这里告诉我：<b>「D-4 选 B，D-5 选留」</b>（或你自己的组合）；</li>
+      <li>或指出某一方案的异议，例如「B 的 12ms 太快，我想 20ms」，我会改完再用
+      <code>scripts/history_load.py</code> 重跑并回贴三项数字（入场总时长 / 同帧峰值 / 最长帧）。</li>
+    </ol>
+    <p class="muted">选完之后才进实现轮次：改 <code>app.js</code> / <code>styles.css</code>，
+    同步 <code>accept_ui.py</code> 的样式断言（如果动了被断言的那几处），
+    然后跑 <code>python -m unittest discover -s tests -t .</code> 与 <code>python scripts/accept_ui.py</code> 双验收。</p>
+  </div>
+
+  <div class="nav">
+    <a href="./index.html">← 决策索引</a>
+    <a href="./a-typography.html">A 排版</a>
+    <a href="./b-visual-language.html">B 视觉语言</a>
+    <a href="./c-structure.html">C 结构</a>
+  </div>
+</div>
+
+<script>
+// 重播入场：把卡片从 DOM 顺序上"重新挂一遍"太粗暴，这里用移除/重加动画类的方式重放。
+document.querySelectorAll("[data-replay-btn]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const stage = btn.closest("[data-replay]");
+    if (!stage) return;
+    const cards = [...stage.querySelectorAll(".widget")];
+    cards.forEach((card, i) => {
+      card.style.animation = "none";
+      card.style.opacity = "";
+      // 强制回流，保证动画真的重播（否则浏览器会合并成一次无变化）
+      void card.offsetWidth;
+      card.style.animation = "";
+      // A/B 方案：用 animation-delay 复现"逐个"与"收敛"的差别
+      const isA = stage.classList.contains("stage--a");
+      const isB = stage.classList.contains("stage--b");
+      if (isA) card.style.animationDelay = (i * 40) + "ms";
+      else if (isB) card.style.animationDelay = (Math.min(i, 6) * 40 + Math.max(0, i - 6) * 12) + "ms";
+      else card.style.animationDelay = "0ms";
+    });
+  });
+});
+// 首屏自动播一次，打开就能看出差别
+window.addEventListener("load", () => {
+  document.querySelectorAll("[data-replay-btn]").forEach((b) => b.click());
+});
+</script>
+</body>
+</html>

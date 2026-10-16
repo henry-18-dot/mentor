@@ -24,6 +24,14 @@
 
 ## 优先级队列
 
+- [ ] **`mentor/audio.py` 零覆盖**（第 34 轮由展示会话的独立审计发现，我复核属实）：77 行、唯一可触发网络
+  `/audio/speech` 的模块，`tests/`、`scripts/` 里出现 **0 次**；由 `mentor/cli.py:273 cmd_audio` 调用。
+  缺的是"未配置端点时明确报错"与"脚本落盘可离线生成"两条断言 —— 都不需要真联网（用本地 stub 端点）。
+- [ ] **对比度最低值待核**：`docs/handover.md` 写"最低 8.11:1"，展示会话报"深色右栏行号 7.29:1"；
+  我在字节一致的代码上重跑复现不出 7.29（最低仍 8.11）。等对方给出状态与对名，或改文档措辞。
+- [ ] **决策页待用户拍板**：A/B/C（我做的，`docs/decisions/`）+ D（展示会话做的，
+  `d-motion-and-marks.html`：D-4 入场节奏三选一、D-5 单边色条）。**D-5 与 B 主题重叠**，需要合并成一份给用户选。
+
 ### P1 产品能力（优先，比样式值钱）
 - [x] **多轮追问上下文**：`Tutor.ask_stream(..., context_turns=2)`，把上一轮引用过的 chunk 作为本轮附加上下文；
       `/api/ask` 支持 `context_turns`（默认 2，0 关闭）。验收：5 条新测试 + 真材料端到端（见第 6 轮）。
@@ -84,6 +92,41 @@
   验收：6 条接口测试 + 自检 2 条断言（见第 16 轮）。
 
 ## 轮次记录
+
+### 第 34 轮 跨会话协作：验收脚本不确定性被外部查出并修掉
+- 触发：用户在 `D:\CS336\mentor-showcase` 新开了一个会话做能力展示，它按展示清单来本仓库取证，
+  第一件事就报来**同一份代码跑 `accept_ui.py` 一次全绿、一次退出码 1**。
+- **根因（复核确认）**：`mentor/store.py` 的 `list_notebooks` 只有 `ORDER BY n.created_at DESC`，
+  而 `created_at` 只精确到秒 → 同秒创建的讲义本与 PDF 本次序由 SQLite 任意决定；
+  `ui/self-test.html` 取 `notebooks[0]` 当讲义本，PDF 排前面就取不到 `lecture_01.py`。
+  验收在 `scripts/accept_ui.py:192/204` 先建讲义本、再建 PDF 本。
+- **两层修复**（**缺一不可**，这是本轮最重要的认识）：
+  1. 根因：`ORDER BY n.created_at DESC, n.rowid DESC`（我改，提交 `0bd3937`）
+     + 回归测试 `tests/test_notebook_order.py` 4 条；反向验证：去掉兜底后测试确实变红。
+  2. **调用方**（展示会话改）：`ui/self-test.html` 改为按"哪本装了 `lecture_01.py`"选、
+     `?nb=<id>` 指定笔记本、按来源 id 判定切换、surface 一致性改用"哪个库有轮次"选库；
+     `ui/app.js` 多导出 `loadNotebook`；`accept_ui.py` 的 `prepare_store` 返回 `{"lecture_nb": id}`。
+  - **只做第 1 层会更糟**：`rowid DESC` 让 PDF **确定地**排第一，`notebooks[0]` 假设从"偶发失败"
+    变成"100% 失败"。展示会话在冻结副本上实测证实了这点（3/3 复现 + 原版 self-test 仍红）。
+    → 教训：**"根因修复"若改变了既有可观测行为，必须同时修依赖该行为的调用方。**
+- **证据**：Lead 在真实工作树上亲自跑双验收（冻结解除后）：
+  `unittest discover` → **Ran 345 tests OK**；`accept_ui.py --case all` → **0 条 ✗**、✓ 主路径通过，
+  日志留档 `runs/ui/accept-r34.txt`。展示会话在隔离副本 `D:\CS336\mentor-freeze`（真副本、176 文件、
+  与工作树关键文件**字节一致**）上也得到 345 OK / 主路径通过。
+- **两条外部审计结论的复核**：
+  - `mentor/audio.py`（77 行，走 `/audio/speech` 网络）在 `tests/`、`scripts/` 里**出现 0 次** —— **属实**，
+    已进队列。它由 `mentor/cli.py:273 cmd_audio` 调用，属"接线了但零覆盖"。
+    （展示会话说它是"唯一走网络的模块"，这一句**不准确**：`mentor/llm/*` 也走网络。）
+  - 那句被指"是错保证"的 `app.js` 注释（"40ms … 每帧只做一次布局"）**在当前仓库里不存在**：
+    全文搜索 `ui/` 无"逐条抵达/一次布局"字样，`app.js:1257` 只有裸 `await wait(40);`。
+    40ms 这个**节奏本身是真的**（展示会话的决策页 D 就是围绕它做的），但被批评的那句注释是**失真的材料**。
+- **对比度数字澄清**：`docs/handover.md` 写"45 组、最低 8.11:1"。展示会话报"本轮最低 7.29:1
+  （深色右栏行号）"。我在**字节一致的代码**上重跑，45 对里最低仍是 **8.11:1（顶栏胶囊）**，
+  深色右栏行号 8.86:1、浅色 10.01:1 —— **7.29 复现不出来**。两者都远高于 4.5:1，属"某一条被当成最低"
+  或"测了本机复现不出的状态"，不改文档、留待它给状态与对名。→ 进 `docs/handover.md` 的待核清单。
+- **合并提交**：展示会话的 `ui/self-test.html`、`ui/app.js`、`scripts/accept_ui.py` 与新增
+  `docs/decisions/d-motion-and-marks.html`（决策页 D：入场节奏 D-4 + 四处单边色条 D-5）
+  **与 `store.py` 的修复一起提交** —— 分开提交会让验收变红。
 
 ### 第 33 轮 验证 DSH 客户端插件能否热重载（用户提问）
 - 问题：用户已装上 `dsh-reading-stability`，问"想改的话是热重载吗"。

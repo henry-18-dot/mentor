@@ -177,10 +177,15 @@ def check_interactive(chrome: "cdp.Chrome", sid: str, label: str) -> list[str]:
     return problems
 
 
-def prepare_store(store: Store, root: str) -> None:
-    """验收用自己的空笔记本：没有历史轮次，首页空状态才可复现。"""
+def prepare_store(store: Store, root: str) -> dict[str, str | None]:
+    """验收用自己的空笔记本：没有历史轮次，首页空状态才可复现。
+
+    返回 `{"lecture_nb": <id>}`：交互自检要用**指定的**讲义笔记本打开，
+    不能让它靠 `notebooks[0]`（`list_notebooks` 按只到秒的 `created_at` 排序，
+    `mentor/store.py:105`；跨秒时后建的排第一，实测同一份代码两次运行顺序不同）。
+    """
     if store.list_notebooks():
-        return
+        return {"lecture_nb": None}
     from mentor.ingest import ingest_paths
     from mentor.targets import expand
 
@@ -189,8 +194,8 @@ def prepare_store(store: Store, root: str) -> None:
         "lectures/lecture_01.py", "lectures/lecture_06.py", "docs/setup-notes.md",
     ], root=root)
     if not targets:
-        print(f"警告：在 {root} 下没找到验收材料，引用相关断言会失败")
-        return
+        print("警告：在 %s 下没找到验收材料，引用相关断言会失败" % root)
+        return {"lecture_nb": None}
     report = ingest_paths(targets, root=root)
     store.attach(notebook.id, report.sources, report.chunks)
     print(f"验收笔记本：{notebook.id}（{len(report.sources)} 份材料、{len(report.chunks)} 个片段）")
@@ -200,11 +205,12 @@ def prepare_store(store: Store, root: str) -> None:
     pdf_targets = expand(["assignments/assignment1-basics/cs336_assignment1_basics.pdf"], root=root)
     if not pdf_targets:
         print("提示：找不到验收用 PDF，`--case pdf` 的相关断言会跳过")
-        return
+        return {"lecture_nb": notebook.id}
     pdf_report = ingest_paths(pdf_targets, root=root)
     store.attach(pdf_notebook.id, pdf_report.sources, pdf_report.chunks)
     print(f"PDF 验收笔记本：{pdf_notebook.id}（{len(pdf_report.sources)} 份材料、"
           f"{len(pdf_report.chunks)} 个片段）")
+    return {"lecture_nb": notebook.id}
 
 
 def check_pdf(chrome: "cdp.Chrome", base: str, label: str,
@@ -869,7 +875,7 @@ def main() -> int:
     shots.mkdir(parents=True, exist_ok=True)
     tmpdir = tempfile.TemporaryDirectory()
     store = Store(args.db) if args.db else Store(Path(tmpdir.name) / "accept.db")
-    prepare_store(store, args.root)
+    ctx = prepare_store(store, args.root)
     app = MentorApp(store, root=args.root)
     httpd = start_server(app, args.port)
     base = f"http://127.0.0.1:{args.port}"
@@ -923,7 +929,10 @@ def main() -> int:
                         continue
                     sid = chrome.new_page(width, height)
                     set_theme(chrome, sid, theme)
-                    chrome.goto(sid, base + "/self-test")
+                    selftest_url = base + "/self-test"
+                    if ctx.get("lecture_nb"):
+                        selftest_url += "?nb=" + ctx["lecture_nb"]
+                    chrome.goto(sid, selftest_url)
                     tag = f"{label}-{theme}"
                     problems += check_interactive(chrome, sid, tag)
                     problems += style_evidence(chrome, sid, tag)

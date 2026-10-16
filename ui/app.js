@@ -1611,4 +1611,4 @@ if (document.readyState === "loading") {
   main();
 }
 
-export { state, submit, openCitation, openSourceAt, copyText, runSearch };
+export { state, submit, openCitation, openSourceAt, copyText, runSearch, loadNotebook };
