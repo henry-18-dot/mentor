@@ -850,9 +850,36 @@ def check_readability(chrome: "cdp.Chrome", sid: str, label: str, *, mobile: boo
         if (!hasEllipsis && !hasTitle) clipped.push(n.textContent.trim().slice(0, 18));
       });
       const toggle = document.querySelector('[data-toggle="left"]');
+      // 点击目标审计：**所有**可见交互控件里最小的那个，而不是抽样某一个。
+      // 由来（2026-10-17）：文档一直声称"点击目标 ≥32px"，但验收只量了模式 chip ——
+      // 拿一个样本支撑了一个全称断言，正是"对比度取样"那类缺陷的同一形态。
+      const targets = [];
+      document.querySelectorAll('button, a[href], input:not([type="hidden"]), select, textarea, [role="button"]').forEach((n) => {
+        if (!visible(n)) return;
+        const r = n.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        // WCAG 2.5.8 的例外：正文里的行内链接不受目标尺寸约束，单独统计
+        const inline = Boolean(n.closest('.md p, .md li, .md blockquote'));
+        targets.push({ name: (n.className || n.tagName).toString().slice(0, 34),
+                       w: Math.round(r.width), h: Math.round(r.height), inline });
+      });
+      const size = (t) => Math.min(t.w, t.h);
+      const controls = targets.filter((t) => !t.inline);
+      const tight = controls.filter((t) => size(t) < 32).sort((a, b) => size(a) - size(b));
+      const under24 = controls.filter((t) => size(t) < 24).sort((a, b) => size(a) - size(b));
+      const inlineTight = targets.filter((t) => t.inline && size(t) < 32).length;
       return {
         tiny: [...new Set(tiny)].slice(0, 6),
         clipped: [...new Set(clipped)].slice(0, 6),
+        targets: {
+          total: targets.length, controls: controls.length, inline: targets.length - controls.length,
+          minControl: controls.length ? size(controls.reduce((a, b) => (size(a) <= size(b) ? a : b))) : null,
+          tight: tight.slice(0, 5).map((t) => `${t.name}@${t.w}x${t.h}`),
+          tightCount: tight.length,
+          under24: under24.slice(0, 5).map((t) => `${t.name}@${t.w}x${t.h}`),
+          under24Count: under24.length,
+          inlineTight,
+        },
         hasLeftToggle: Boolean(toggle),
       };
     })()""") or {}
@@ -860,6 +887,16 @@ def check_readability(chrome: "cdp.Chrome", sid: str, label: str, *, mobile: boo
         problems.append(f"{label}: 可见文字小于 12px：{data['tiny']}")
     if data.get("clipped"):
         problems.append(f"{label}: 文字被裁切：{data['clipped']}")
+    t = data.get("targets") or {}
+    if t:
+        print(f"  点击目标：控件 {t.get('controls')} 个（另 {t.get('inline')} 个正文内联链接不计），"
+              f"最小控件 {t.get('minControl')}px｜<32px 的有 {t.get('tightCount')} 个"
+              f"（{t.get('tight')}）｜内联链接 <32px 的有 {t.get('inlineTight')} 个")
+        # 硬线取 WCAG 2.2 SC 2.5.8（AA）的 24px；本项目自设的高线 32px 只报不拦，
+        # 因为那会把"设计上就该小的图标按钮"也判死，反而逼出假修复。
+        if t.get("under24Count"):
+            problems.append(f"{label}: 有 {t['under24Count']} 个交互控件小于 24px（WCAG 2.2 SC 2.5.8 的 AA 下界）："
+                            f"{t['under24']}")
 
     if mobile:
         # 窄屏：左右栏是抽屉，必须能打开也能关掉（不靠 hover）

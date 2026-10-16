@@ -48,6 +48,29 @@ class ContrastSamplingTest(unittest.TestCase):
         self.assertIn("5.22", handover, "handover 没写实测的最低值")
         self.assertNotIn("最低 8.11", handover, "旧的'最低 8.11'是取首个匹配得出的高估值，不该还在")
 
+    # --- 同一类缺陷的第三处：点击目标曾经"用一个样本支撑全称断言" -----------------
+
+    def test_target_audit_enumerates_every_control(self) -> None:
+        js = re.search(r"const targets = \[\];(.*?)const inlineTight", SOURCE, re.S)
+        self.assertIsNotNone(js, "找不到点击目标审计的取样段")
+        body = js.group(1)
+        for sel in ("button", "a[href]", "input", "select", "textarea"):
+            with self.subTest(selector=sel):
+                self.assertIn(sel, body, f"点击目标审计没覆盖 {sel}")
+        self.assertIn("controls.reduce", SOURCE, "必须取所有控件里的最小值，不能抽样一个")
+
+    def test_target_audit_separates_inline_links(self) -> None:
+        """WCAG 2.5.8 对正文内联链接有例外，必须单独统计而不是混进下界。"""
+        js = re.search(r"const targets = \[\];(.*?)const inlineTight", SOURCE, re.S).group(1)
+        self.assertIn("inline", js)
+        self.assertIn(".md p, .md li", js)
+
+    def test_api_doc_no_longer_overclaims_target_size(self) -> None:
+        api = (PROJECT / "docs" / "api.md").read_text(encoding="utf-8")
+        self.assertNotIn("点击目标 ≥ 32px", api,
+                         "全称的 ≥32px 已被证伪（实测最小 24×24，20+ 个控件 <32px），不许再出现")
+        self.assertIn("24", api, "api.md 要写实测的下界")
+
 
 if __name__ == "__main__":
     unittest.main()
