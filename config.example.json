@@ -1,0 +1,14 @@
+{
+  "_说明": "复制成 mentor/config.json 即可生效；环境变量优先级更高。不填 provider 时自动判断：配好 key 用真实模型，否则离线抽取。",
+  "provider": "auto",
+  "base_url": "https://api.deepseek.com/v1",
+  "api_key": "",
+  "model": "deepseek-chat",
+  "timeout": 60,
+  "stream": true,
+  "_tts说明": "要生成音频概览的 mp3 才需要，缺省只导出脚本。",
+  "tts_base_url": "",
+  "tts_api_key": "",
+  "tts_model": "tts-1",
+  "tts_voice": "alloy"
+}

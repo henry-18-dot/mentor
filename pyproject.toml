@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mentor"
+version = "0.1.0"
+description = "资料来源接地的学习工作台：对标 NotebookLM，界面由组件协议即时编排"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []          # 运行时零依赖（标准库）
+
+[project.optional-dependencies]
+pdf = ["pypdf>=4.0"]       # 只有要读 PDF 讲义才需要
+dev = ["pytest>=7.0"]      # 测试用 unittest 也能跑，pytest 只是方便
+
+[project.scripts]
+mentor = "mentor.cli:main"
+
+[project.urls]
+Homepage = "https://example.invalid/mentor"
+
+[tool.setuptools]
+packages = ["mentor", "mentor.llm"]
+
+# 界面文件在仓库根的 ui/ 下（服务端会先找项目根 ui/，再找包内 mentor/ui/）。
+# 若要以包的形式分发，把 ui/ 复制到 mentor/ui/ 再 build，或用 MENTOR_UI 指定目录。
+[tool.setuptools.package-data]
+mentor = ["ui/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

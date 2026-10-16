@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>mentor · 智能画布</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- 纯静态挂载点：导航、左右栏、画布、输入区都由 app.js:mountShell() 生成，
+     保证真实模式与 preview.html 的结构完全一致（只有一份真源）。 -->
+<div class="app" id="app"></div>
+<noscript>
+  <p style="padding:16px">这个界面需要 JavaScript（原生 ESM，无构建、无外部依赖）。</p>
+</noscript>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

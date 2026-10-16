@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>mentor 交互自检</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- 与 index.html 同一套界面（app.js 挂载），只是多了一段自检脚本：
+     用真实事件走一遍主路径，把每条断言以 SELFTEST-OK / SELFTEST-FAIL 写回 DOM。
+     由 scripts/accept_ui.py 通过无头浏览器打开并读取结果。 -->
+<div class="app" id="app"></div>
+<pre id="selftest-log" aria-live="polite" style="position:fixed;left:-9999px;top:0"></pre>
+<script type="module">
+import "./app.js";
+
+const log = document.getElementById("selftest-log");
+const record = (ok, name, detail = "") => {
+  const line = `${ok ? "SELFTEST-OK" : "SELFTEST-FAIL"} ${name}${detail ? " — " + detail : ""}`;
+  log.textContent += line + "\n";
+  return ok;
+};
+
+// 页面自己的错误也要能被验收脚本看到（远端 URL 上探针不注入，收不到 console）
+window.addEventListener("error", (event) => {
+  const where = event.filename ? ` @ ${event.filename}:${event.lineno}` : "";
+  record(false, "页面未捕获异常", `${event.message || event.type}${where}`);
+});
+window.addEventListener("unhandledrejection", (event) => {
+  const reason = event.reason && (event.reason.message || event.reason);
+  record(false, "未处理的 Promise 拒绝", String(reason));
+});
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function waitFor(label, fn, timeout = 20000, step = 150) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    try {
+      const value = fn();
+      if (value) return value;
+    } catch (err) { /* 元素还没出现，继续等 */ }
+    await sleep(step);
+  }
+  throw new Error(`等待超时：${label}`);
+}
+
+async function main() {
+  const params = new URLSearchParams(location.search);
+  const mode = params.get("mode") || "explore";
+  const question = params.get("q") || "BPE 分词器是怎么训练的？";
+
+  const input = await waitFor("输入框", () => document.getElementById("composer-input"));
+  record(true, "界面挂载出输入框");
+
+  const form = await waitFor("发送表单", () => document.getElementById("composer"));
+  record(true, "发送表单存在");
+
+  // 等笔记本与材料加载完（左栏出现来源项，或至少画布有内容）
+  const sources = await waitFor("左栏来源项", () => {
+    const items = document.querySelectorAll(".src-item");
+    return items.length ? items : null;
+  }, 25000);
+  record(true, "笔记本与材料已加载", `${sources.length} 份材料`);
+
+  // 空状态里也有 dat-mode 的"示例"按钮（点它会直接发一个示例问题），
+  // 所以这里只在输入区的 chips 里找。
+  const chip = document.querySelector(`.composer .mode-chip[data-mode="${mode}"]`);
+  if (chip) {
+    chip.click();
+    record(chip.getAttribute("aria-pressed") === "true" || chip.classList.contains("is-active"),
+           "模式 chip 可选中", mode);
+  } else {
+    record(false, "模式 chip 存在", mode);
+  }
+
+  input.focus();
+  input.value = question;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  record(input.value === question, "输入问题", question);
+
+  form.requestSubmit();
+
+  // 关键：等**真实**组件画到画布上（plan 阶段先出现的是骨架占位，不算数）
+  const rendered = () => [...document.querySelectorAll("#canvas article.widget:not(.widget--skeleton)")];
+  const widgets = await waitFor("画布组件", () => {
+    const nodes = rendered();
+    return nodes.length >= 3 ? nodes : null;
+  }, 40000);
+  const types = [...new Set(widgets.map((w) => w.dataset.widgetType).filter(Boolean))];
+  record(true, "组件流式渲染", `${widgets.length} 个，类型 ${types.join("/")}`);
+  record(types.includes("answer"), "含正文组件");
+
+  const chips = document.querySelectorAll('.cite-chip[data-cite-n]');
+  record(chips.length > 0, "正文出现引用 chip", `${chips.length} 个`);
+
+  if (chips.length) {
+    chips[0].click();
+    const hit = await waitFor("右栏高亮行", () => {
+      const nodes = document.querySelectorAll(".line.is-hit, .line.is-target");
+      return nodes.length ? nodes : null;
+    }, 20000);
+    const line = hit[0].dataset.line || hit[0].getAttribute("data-line");
+    record(true, "点引用后右栏跳到原文并高亮", `第 ${line} 行`);
+  }
+
+  const readerText = document.querySelector(".rail--right")?.textContent || "";
+  const readerLines = document.querySelectorAll(".line").length;
+  record(readerLines > 20, "右栏渲染了完整原文", `${readerLines} 行`);
+  record(readerText.trim().length > 200, "右栏确实加载了材料原文",
+         `${readerText.trim().length} 字符`);
+
+  const stillThere = rendered().length;
+  record(stillThere >= 3, "内容在交互后仍然保留", `${stillThere} 个组件`);
+
+  // 命中位置：左栏搜索 → 片段里出现词级高亮 → 点开右栏后同一行也有词级高亮
+  const searchInput = document.getElementById("search-input");
+  if (searchInput) {
+    searchInput.focus();
+    searchInput.value = "BPE tokenizer";
+    searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+    try {
+      const marked = await waitFor("左栏命中词高亮", () => {
+        const nodes = document.querySelectorAll(".src-item__hit .term-hit");
+        return nodes.length ? nodes : null;
+      }, 15000);
+      record(true, "左栏片段高亮命中词", `${marked.length} 处`);
+      const item = document.querySelector(".src-item__hit .term-hit")?.closest(".src-item");
+      item?.click();
+      const inReader = await waitFor("右栏命中词高亮", () => {
+        const nodes = document.querySelectorAll(".line .term-hit");
+        return nodes.length ? nodes : null;
+      }, 15000);
+      const lineText = inReader[0].closest(".line")?.dataset.line;
+      record(true, "右栏同一行高亮命中词", `第 ${lineText} 行，${inReader.length} 处`);
+    } catch (err) {
+      record(false, "命中词高亮链路", String(err && err.message || err));
+    }
+  } else {
+    record(false, "左栏搜索框存在");
+  }
+
+  // 搜索命中定位：后端算出搜索词的首个命中行，点左栏"来源卡"后右栏应滚到该行
+  try {
+    const books = await (await fetch("/api/notebooks")).json();
+    const nbMeta = (books.notebooks || [])[0];
+    const nbPayload = nbMeta ? await (await fetch(`/api/notebooks/${encodeURIComponent(nbMeta.id)}`)).json() : null;
+    const lecture = ((nbPayload && nbPayload.sources) || [])
+      .find((s) => String(s.path || "").endsWith("lecture_01.py"));
+    // 用界面当前实际的搜索词去探（上面搜索框填的是 "BPE tokenizer"）
+    const probeTerm = "BPE tokenizer";
+    const probe = await fetch(`/api/sources/${encodeURIComponent(lecture ? lecture.id : "")}`
+      + `?highlight=${encodeURIComponent(probeTerm)}`);
+    const payload = probe.ok ? await probe.json() : null;
+    const hl = payload && payload.highlight;
+    record(Boolean(hl && hl.found && hl.line > 0), "/api/sources?highlight= 返回首个命中行",
+           hl ? `${hl.term} → 第 ${hl.line} 行` : "无");
+    if (hl && hl.found) {
+      // 先恢复来源列表（搜索后列表里是命中卡，不是来源卡），再按 data-source-id 精确定位
+      document.querySelector("#src-list .ghost-btn")?.click();
+      const card = await waitFor("左栏 lecture_01 来源卡", () => (
+        document.querySelector(`#src-list .src-item[data-source-id="${lecture.id}"]`)
+      ), 6000);
+      card.click();
+      const target = await waitFor("右栏定位到命中行", () => {
+        const node = document.querySelector(".line.is-target");
+        return node && Number(node.dataset.line) === hl.line ? node : null;
+      }, 8000);
+      record(true, "带搜索词打开原文时定位到该行", `第 ${target.dataset.line} 行`);
+    }
+  } catch (err) {
+    record(false, "搜索命中定位", String(err && err.message || err));
+  }
+
+  // 引用悬停预览：不点击也能先看到"指向哪一行、原文说什么"
+  const firstChip = document.querySelector(".cite-chip[data-cite-n]");
+  if (firstChip) {
+    firstChip.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    try {
+      const card = await waitFor("引用预览卡", () => {
+        const node = document.getElementById("cite-preview");
+        return node && !node.hidden && node.textContent.trim() ? node : null;
+      }, 8000);
+      const quote = (card.querySelector(".cite-preview__quote") || {}).textContent || "";
+      const locator = (card.querySelector(".cite-preview__locator") || {}).textContent || "";
+      record(quote.trim().length > 10 && /:\d+/.test(locator),
+             "悬停引用出现预览（含行号与原文）", `${locator} · ${quote.trim().length} 字`);
+      firstChip.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+      await sleep(400);
+      const gone = document.getElementById("cite-preview");
+      record(!gone || gone.hidden, "移开后预览消失");
+    } catch (err) {
+      record(false, "引用悬停预览", String(err && err.message || err));
+    }
+  } else {
+    record(false, "正文有可悬停的引用 chip");
+  }
+
+  // 键盘浏览画布：j/k 移动光标、Enter 打开该组件首条引用
+  const key = (k, extra = {}) => document.dispatchEvent(new KeyboardEvent("keydown", {
+    key: k, bubbles: true, cancelable: true, ...extra,
+  }));
+  const cursorInfo = () => {
+    const node = document.querySelector("#canvas article.widget.is-cursor");
+    return node ? {
+      node,
+      title: (node.querySelector(".widget__title") || {}).textContent || "",
+      focused: document.activeElement === node,
+      visible: (() => {
+        const r = node.getBoundingClientRect();
+        return r.top >= 0 && r.bottom <= (window.innerHeight + 4);
+      })(),
+    } : null;
+  };
+  try {
+    key("j");
+    const first = await waitFor("画布光标", () => cursorInfo(), 6000);
+    record(first.focused, "j 把焦点移到组件上", first.title.trim());
+    record(first.visible, "光标所在组件在可视区内");
+    key("j");
+    await sleep(200);
+    const second = cursorInfo();
+    record(Boolean(second) && second.node !== first.node, "再按 j 移到下一个组件", second?.title.trim());
+    key("k");
+    await sleep(200);
+    const back = cursorInfo();
+    record(Boolean(back) && back.node === first.node, "k 退回上一个组件");
+    key("Enter");
+    await sleep(800);
+    const opened = document.querySelectorAll(".line").length;
+    record(opened > 20, "Enter 打开该组件的引用原文", `右栏 ${opened} 行`);
+    // 输入框里打 j 不该动画布
+    const input = document.getElementById("composer-input");
+    input.focus();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "j", bubbles: true }));
+    await sleep(150);
+    record(document.querySelector("#canvas article.widget.is-cursor") === first.node,
+           "在输入框里按 j 不影响画布光标");
+  } catch (err) {
+    record(false, "键盘浏览画布", String(err && err.message || err));
+  }
+
+  // 探针不注入远端 URL，取不到 console / 溢出指标，所以页面自己量一遍
+  const docWidth = document.documentElement.scrollWidth;
+  const viewWidth = window.innerWidth;
+  record(docWidth <= viewWidth + 1, "没有横向溢出",
+         `scrollWidth=${docWidth} viewport=${viewWidth}`);
+
+  // 流协议一致性：画布上的组件必须与后端最终 surface 声明的一致（顺序 + 类型）
+  try {
+    const books = await (await fetch("/api/notebooks")).json();
+    const nb = (books.notebooks || [])[0];
+    const turns = await (await fetch(`/api/turns?notebook_id=${encodeURIComponent(nb.id)}`)).json();
+    const latest = (turns.turns || [])[0];
+    const detail = await (await fetch(`/api/turns/${encodeURIComponent(latest.id)}`)).json();
+    const declared = (detail.turn.surface.widgets || []).map((w) => w.type);
+    const domTypes = rendered().map((n) => n.dataset.widgetType);
+    const same = declared.length === domTypes.length &&
+      declared.every((t, i) => t === domTypes[i]);
+    record(same, "画布与后端最终 surface 一致",
+           `声明 ${declared.length} 个 / DOM ${domTypes.length} 个`);
+    record(declared.length > 0, "后端 surface 含组件");
+  } catch (err) {
+    record(false, "拉取最终 surface 失败", String(err && err.message || err));
+  }
+}
+
+main()
+  .catch((err) => record(false, "自检异常", String(err && err.message || err)))
+  .finally(() => { log.textContent += "SELFTEST-DONE\n"; });
+</script>
+</body>
+</html>

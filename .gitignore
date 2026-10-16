@@ -1,0 +1,11 @@
+# mentor 运行产物
+data/
+runs/
+*.db
+*.db-journal
+__pycache__/
+*.pyc
+ui/_shots/
+.pytest_cache/
+.venv/
+config.json

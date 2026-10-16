@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>mentor 离线预览 · 17 种组件</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!--
+  离线预览页：不连后端，直接渲染 fixtures/surface-demo.json（协议里全部 16 种组件 + 1 个刻意未知的类型）。
+  下面两个 application/json 块由 build_preview.py 依据 fixtures/ 生成，内容与之逐字一致；
+  之所以内联，是因为浏览器不允许 file:// 页面 fetch 本地 JSON。
+  fixtures/surface-demo.json 仍是唯一真源：改完 fixtures 后重跑 build_preview.py 即可。
+-->
+<script type="application/json" id="demo-surface">
+{
+  "id": "srf_demo0000001",
+  "question": "BPE 分词器的合并依据是什么？它和字节级分词、字符级分词该怎么选？",
+  "layout": "explore",
+  "intent": "explore",
+  "provider": "offline",
+  "degraded": false,
+  "notes": [
+    "示例 Surface：用于 ui/preview.html 的离线验收，覆盖 protocol.WIDGET_TYPES 里全部 17 种组件，外加一个刻意未知的类型。",
+    "widget 顺序刻意排成 plan → answer → quote → sources → concept_map → timeline → steps → compare_table → cheatsheet → flashcards → quiz → code → formula → image → followups → audio_script → progress → heatmap → 未知类型。",
+    "所有 locator 都指向 fixtures/sources-demo.json 里真实存在的行号，点引用 chip 可验证右栏跳转与高亮。"
+  ],
+  "created_at": "2026-10-15T10:20:00+0800",
+  "citations": [
+    {
+      "n": 1,
+      "chunk_id": "ck_48ba2f81c3d7",
+      "source_id": "src_a01b2c3d4e5f",
+      "locator": "lecture_01.py:4",
+      "title": "Lecture 1: Overview, Tokenization",
+      "quote": "Why did we make this course? 现有课程大多从 NLP 任务出发，"
+    },
+    {
+      "n": 2,
+      "chunk_id": "ck_b1d6e0f2a944",
+      "source_id": "src_a01b2c3d4e5f",
+      "locator": "lecture_01.py:12",
+      "title": "Lecture 1: Overview, Tokenization",
+      "quote": "分词器把文本（字符串）映射成整数序列（token ids）。"
+    },
+    {
+      "n": 3,
+      "chunk_id": "ck_7c2a55de10b3",
+      "source_id": "src_a01b2c3d4e5f",
+      "locator": "lecture_01.py:20",
+      "title": "Lecture 1: Overview, Tokenization",
+      "quote": "BPE 的合并依据只有一个：最高频的相邻 token 对（the most common pair of adjacent tokens）。"
+    },
+    {
+      "n": 4,
+      "chunk_id": "ck_e30f7a4b6c18",
+      "source_id": "src_a01b2c3d4e5f",
+      "locator": "lecture_01.py:24",
+      "title": "Lecture 1: Overview, Tokenization",
+      "quote": "词表大小的权衡：词表越大，序列越短、训练越省时间，"
+    },
+    {
+      "n": 5,
+      "chunk_id": "ck_2d9c4f7e8a01",
+      "source_id": "src_a01b2c3d4e5f",
+      "locator": "lecture_01.py:30",
+      "title": "Lecture 1: Overview, Tokenization",
+      "quote": "1. 自注意力（self-attention）：每个位置根据当前上下文动态聚合其他位置的信息，"
+    },
+    {
+      "n": 6,
+      "chunk_id": "ck_5a7b1e93c2f4",
+      "source_id": "src_a01b2c3d4e5f",
+      "locator": "lecture_01.py:44",
+      "title": "Lecture 1: Overview, Tokenization",
+      "quote": "损失函数是 next-token prediction 的交叉熵："
+    },
+    {
+      "n": 7,
+      "chunk_id": "ck_9b8c0d1e2f35",
+      "source_id": "src_9f8e7d6c5b4a",
+      "locator": "lecture_01_notes.md:5",
+      "title": "第 1 讲随堂笔记（BPE 与注意力）",
+      "quote": "自注意力把每个位置表示成其它位置表示的加权和，权重由 query 与 key 的点积决定。"
+    }
+  ],
+  "widgets": [
+    {
+      "id": "w_demo_answer",
+      "type": "answer",
+      "title": "BPE 的合并依据",
+      "cites": [
+        1,
+        3,
+        4,
+        7
+      ],
+      "note": "组件右上角的“复制/收起”对每一块都可用；正文里的 [n] 是引用 chip。",
+      "data": {
+        "confidence": "high",
+        "markdown": "BPE 的合并依据只有一条：**当前语料里最高频的相邻 token 对**。它既不按字母序，也不随机——每一步合并都能从语料统计里复现出来 [3]。\n\n三种粒度的取舍：\n\n- **字符级**：词表很小，但序列很长，连字母都要单独预测。\n- **字节级**：词表恰好 256，任何 Unicode 文本都能表示，永不 OOV。\n- **BPE**：从字节出发反复合并最高频相邻对，直到命中预设词表大小，是前两者的折中 [2][3]。\n\n词表越大，序列越短、训练越省时间，但嵌入矩阵（`vocab_size × d_model`）的参数与内存同步增长，所以实践中常见 50k ~ 100k 这一折中点 [4]。\n\n> 这门课的立场：先自己实现 BPE 与 Transformer，再谈“为什么训不动” [1]。"
+      }
+    },
+    {
+      "id": "w_demo_quote",
+      "type": "quote",
+      "title": "讲义原句",
+      "cites": [
+        3
+      ],
+      "data": {
+        "text": "BPE 的合并依据只有一个：最高频的相邻 token 对（the most common pair of adjacent tokens）。",
+        "locator": "lecture_01.py:20",
+        "source_id": "src_a01b2c3d4e5f"
+      }
+    },
+    {
+      "id": "w_demo_sources",
+      "type": "sources",
+      "title": "本次命中的材料",
+      "cites": [],
+      "data": {
+        "items": [
+          {
+            "n": 1,
+            "locator": "lecture_01.py:4",
+            "title": "Lecture 1: Overview, Tokenization",
+            "snippet": "Why did we make this course? 现有课程大多从 NLP 任务出发，而这一门从“一个 LM 是怎么被造出来的”出发。",
+            "source_id": "src_a01b2c3d4e5f",
+            "chunk_id": "ck_48ba2f81c3d7"
+          },
+          {
+            "n": 3,
+            "locator": "lecture_01.py:20",
+            "title": "Lecture 1: Overview, Tokenization",
+            "snippet": "BPE 的合并依据只有一个：最高频的相邻 token 对（the most common pair of adjacent tokens）。",
+            "source_id": "src_a01b2c3d4e5f",
+            "chunk_id": "ck_7c2a55de10b3"
+          },
+          {
+            "n": 7,
+            "locator": "lecture_01_notes.md:5",
+            "title": "第 1 讲随堂笔记（BPE 与注意力）",
+            "snippet": "自注意力把每个位置表示成其它位置表示的加权和，权重由 query 与 key 的点积决定。",
+            "source_id": "src_9f8e7d6c5b4a",
+            "chunk_id": "ck_9b8c0d1e2f35"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_concept_map",
+      "type": "concept_map",
+      "title": "概念关系：从文本到语言模型",
+      "cites": [
+        2,
+        3,
+        5,
+        7
+      ],
+      "data": {
+        "nodes": [
+          {
+            "id": "text",
+            "label": "原始文本",
+            "group": "数据",
+            "weight": 1
+          },
+          {
+            "id": "tokenizer",
+            "label": "分词器",
+            "group": "数据",
+            "weight": 3
+          },
+          {
+            "id": "bpe",
+            "label": "BPE",
+            "group": "数据",
+            "weight": 2
+          },
+          {
+            "id": "ids",
+            "label": "token ids",
+            "group": "数据",
+            "weight": 1
+          },
+          {
+            "id": "emb",
+            "label": "嵌入矩阵",
+            "group": "模型",
+            "weight": 2
+          },
+          {
+            "id": "attn",
+            "label": "自注意力",
+            "group": "模型",
+            "weight": 3
+          },
+          {
+            "id": "ffn",
+            "label": "前馈层",
+            "group": "模型",
+            "weight": 2
+          },
+          {
+            "id": "loss",
+            "label": "交叉熵损失",
+            "group": "训练",
+            "weight": 2
+          },
+          {
+            "id": "adamw",
+            "label": "AdamW",
+            "group": "训练",
+            "weight": 1
+          },
+          {
+            "id": "warmup",
+            "label": "LR warmup",
+            "group": "训练",
+            "weight": 1
+          }
+        ],
+        "edges": [
+          {
+            "from": "text",
+            "to": "tokenizer",
+            "label": "输入"
+          },
+          {
+            "from": "bpe",
+            "to": "tokenizer",
+            "label": "属于"
+          },
+          {
+            "from": "tokenizer",
+            "to": "ids",
+            "label": "产出"
+          },
+          {
+            "from": "ids",
+            "to": "emb",
+            "label": "查表"
+          },
+          {
+            "from": "emb",
+            "to": "attn",
+            "label": "输入"
+          },
+          {
+            "from": "attn",
+            "to": "ffn",
+            "label": "残差"
+          },
+          {
+            "from": "ffn",
+            "to": "loss",
+            "label": "logits"
+          },
+          {
+            "from": "loss",
+            "to": "adamw",
+            "label": "梯度"
+          },
+          {
+            "from": "adamw",
+            "to": "warmup",
+            "label": "调度"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_timeline",
+      "type": "timeline",
+      "title": "课程路线图",
+      "cites": [
+        1
+      ],
+      "data": {
+        "items": [
+          {
+            "at": "Week 1",
+            "label": "课程概览与分词",
+            "detail": "先建立成本直觉（10^23 ~ 10^24 FLOPs），再动手写 BPE。"
+          },
+          {
+            "at": "Assignment 1",
+            "label": "实现 BPE 与 Transformer 组件",
+            "detail": "分词器、注意力、位置编码都在这一步落地。"
+          },
+          {
+            "at": "Week 4",
+            "label": "训练动态",
+            "detail": "损失曲线、学习率调度、梯度裁剪与不稳定现象。"
+          },
+          {
+            "at": "Assignment 2",
+            "label": "训练一个小型语言模型",
+            "detail": "把组件拼成完整系统，跑通数据管线到评估。"
+          },
+          {
+            "at": "后半程",
+            "label": "系统与效率",
+            "detail": "激活重计算、混合精度、FlashAttention 等 IO 与显存议题。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_steps",
+      "type": "steps",
+      "title": "动手实现 BPE 的步骤",
+      "cites": [
+        3,
+        4
+      ],
+      "data": {
+        "items": [
+          {
+            "title": "按字节初始化",
+            "detail": "把文本编码成 UTF-8 字节，词表就是 0~255 这 256 个符号。"
+          },
+          {
+            "title": "统计相邻对频次",
+            "detail": "扫一遍当前语料，记录每个相邻 token 对出现的次数。"
+          },
+          {
+            "title": "合并最高频对",
+            "detail": "取频次最高的那一对，合成一个新 token，写回词表并记录合并规则。"
+          },
+          {
+            "title": "重复到词表上限",
+            "detail": "反复执行上一步，直到达到预设词表大小（常见 50k ~ 100k）。"
+          },
+          {
+            "title": "编码新文本",
+            "detail": "按合并规则的记录顺序贪心地重新切分输入，遇到未知字符直接退回字节。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_compare",
+      "type": "compare_table",
+      "title": "三种分词粒度对比",
+      "cites": [
+        2,
+        4
+      ],
+      "data": {
+        "columns": [
+          "维度",
+          "字符级",
+          "字节级",
+          "BPE"
+        ],
+        "rows": [
+          [
+            "词表大小",
+            "几千（视字符集）",
+            "固定 256",
+            "数据驱动，常见 50k ~ 100k"
+          ],
+          [
+            "序列长度",
+            "最长",
+            "中等",
+            "最短"
+          ],
+          [
+            "未登录词",
+            "可能出现",
+            "不会出现",
+            "不会出现"
+          ],
+          [
+            "多语言",
+            "需要扩展字符集",
+            "天然覆盖",
+            "天然覆盖"
+          ],
+          [
+            "主要代价",
+            "序列长、训练慢",
+            "单 token 信息量低",
+            "需要离线训练合并规则"
+          ]
+        ],
+        "caption": "词表越大，序列越短、训练越省时间，但嵌入矩阵的参数同步增长。"
+      }
+    },
+    {
+      "id": "w_demo_cheatsheet",
+      "type": "cheatsheet",
+      "title": "第 1 讲速查",
+      "cites": [
+        3,
+        5,
+        7
+      ],
+      "data": {
+        "items": [
+          {
+            "term": "BPE",
+            "definition": "从字节出发，反复合并最高频相邻对的子词分词算法。"
+          },
+          {
+            "term": "token id",
+            "definition": "分词器输出的整数下标；语言模型只看到这一层。"
+          },
+          {
+            "term": "next-token prediction",
+            "definition": "给定前文预测下一个 token，是本次训练对象。"
+          },
+          {
+            "term": "self-attention",
+            "definition": "每个位置按 query/key 点积的权重，加权聚合其它位置的表示。"
+          },
+          {
+            "term": "warmup",
+            "definition": "训练最初若干步从小学习率线性升到目标值，用来压住早期震荡。"
+          },
+          {
+            "term": "激活重计算",
+            "definition": "前向不存中间激活、反向时重算，用算力换显存。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_flashcards",
+      "type": "flashcards",
+      "title": "闪卡：点一下翻面",
+      "cites": [
+        3,
+        5
+      ],
+      "data": {
+        "cards": [
+          {
+            "front": "BPE 每一步合并的依据是什么？",
+            "back": "当前语料中频次最高的相邻 token 对。"
+          },
+          {
+            "front": "字节级分词的词表大小是多少？",
+            "back": "恰好 256，对应一个字节的全部取值。"
+          },
+          {
+            "front": "自注意力为什么需要缩放 1/sqrt(d_k)？",
+            "back": "让点积的方差不随维度放大，避免 softmax 进入饱和区。"
+          },
+          {
+            "front": "pre-norm 的作用？",
+            "back": "把层归一化放在子层之前，让深层网络更容易训练。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_quiz",
+      "type": "quiz",
+      "title": "自测：分词与注意力",
+      "cites": [
+        3,
+        4,
+        7
+      ],
+      "data": {
+        "questions": [
+          {
+            "q": "BPE 的合并依据是什么？",
+            "choices": [
+              "随机选择相邻对",
+              "最高频的相邻 token 对",
+              "按字母序合并",
+              "按 UTF-8 字节值排序"
+            ],
+            "answer_index": 1,
+            "why": "讲义原文：merge the most common pair of adjacent tokens。每一步都可从语料统计复现。"
+          },
+          {
+            "q": "为什么 BPE 里常见的词表大小是 50k ~ 100k？",
+            "choices": [
+              "硬件只支持这个范围",
+              "词表越大序列越短，但嵌入矩阵参数同步增长，这是一个折中点",
+              "再大就无法表示中文",
+              "Google 的规定"
+            ],
+            "answer_index": 1,
+            "why": "词表大小同时影响序列长度与嵌入矩阵（vocab_size × d_model）的参数和内存。"
+          },
+          {
+            "q": "字节级分词相对字符级的最大优势是？",
+            "choices": [
+              "序列更短",
+              "永不出现未登录词",
+              "参数更少",
+              "训练更快"
+            ],
+            "answer_index": 1,
+            "why": "词表固定为 256，任何 Unicode 文本都能被表示，不存在 OOV。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_code",
+      "type": "code",
+      "title": "BPE 合并循环（示意）",
+      "cites": [
+        3
+      ],
+      "data": {
+        "language": "python",
+        "code": "from collections import Counter\n\ndef merge_once(tokens: list[int]) -> tuple[list[int], tuple[int, int]]:\n    \"\"\"合并一次：找出最高频的相邻对，就地合成新 id。\"\"\"\n    counts = Counter(zip(tokens, tokens[1:]))\n    pair, freq = counts.most_common(1)[0]          # 依据：最高频\n    out, i = [], 0\n    while i < len(tokens):\n        if i + 1 < len(tokens) and (tokens[i], tokens[i + 1]) == pair:\n            out.append(new_id(pair))\n            i += 2\n        else:\n            out.append(tokens[i])\n            i += 1\n    return out, pair",
+        "note": "真实实现还要处理预分词边界与并行统计，但骨架就是这三步：统计、取最高频、合并。"
+      }
+    },
+    {
+      "id": "w_demo_formula",
+      "type": "formula",
+      "title": "训练目标",
+      "cites": [
+        6
+      ],
+      "data": {
+        "plain": "L(θ) = − (1/T) · Σ_{t=1..T} log p_θ(x_t | x_<t)",
+        "latex": "\\mathcal{L}(\\theta) = -\\frac{1}{T}\\sum_{t=1}^{T}\\log p_\\theta(x_t \\mid x_{<t})",
+        "note": "这就是 next-token prediction 的交叉熵；困惑度 perplexity = exp(L)。"
+      }
+    },
+    {
+      "id": "w_demo_image",
+      "type": "image",
+      "title": "Transformer block 结构",
+      "cites": [
+        5
+      ],
+      "data": {
+        "src": "assets/transformer-block.png",
+        "caption": "示例插图的路径在离线验收环境里不存在，渲染器会退化成占位块而不是报错。"
+      }
+    },
+    {
+      "id": "w_demo_followups",
+      "type": "followups",
+      "title": "可以接着问",
+      "cites": [],
+      "data": {
+        "items": [
+          "为什么自注意力要除以 sqrt(d_k)？",
+          "字节级分词在中文上会遇到什么问题？",
+          "pre-norm 和 post-norm 的训练动态差别？",
+          "把 FlashAttention 的思路用自己的话讲一遍。",
+          "词表大小 32k 和 100k 在同样的 token 预算下有什么差别？"
+        ]
+      }
+    },
+    {
+      "id": "w_demo_audio",
+      "type": "audio_script",
+      "title": "三分钟口播脚本",
+      "cites": [
+        1,
+        3,
+        5
+      ],
+      "data": {
+        "segments": [
+          {
+            "speaker": "讲述",
+            "text": "这一讲回答一个问题：一个语言模型到底是怎么被造出来的。课程不调用 API，五个作业串起来就是一个完整系统。"
+          },
+          {
+            "speaker": "讲述",
+            "text": "第一步是分词。文本先进分词器，变成整数序列；模型从不直接看字符，所以很多“写错字”的毛病其实出在这一层。"
+          },
+          {
+            "speaker": "提问",
+            "text": "那为什么不用字符呢？"
+          },
+          {
+            "speaker": "讲述",
+            "text": "因为序列会变得很长。BPE 的做法是：从字节出发，反复合并最高频的相邻对，直到词表达到预设大小。"
+          },
+          {
+            "speaker": "讲述",
+            "text": "词表变大，序列变短、训练更快，但嵌入矩阵的参数也同步变大，所以 50k 到 100k 是常见的折中点。"
+          },
+          {
+            "speaker": "讲述",
+            "text": "接下来是 Transformer：自注意力让每个位置按上下文动态聚合信息，多头在不同子空间并行，前馈层做逐位置的非线性变换，残差与层归一化保证深层可训练。"
+          },
+          {
+            "speaker": "小结",
+            "text": "最后记住一句话：分词决定模型看到什么，注意力决定它怎么组合，损失与优化器决定它学得多快。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_progress",
+      "type": "progress",
+      "title": "本讲到目前为止",
+      "cites": [],
+      "data": {
+        "items": [
+          {
+            "label": "讲义阅读",
+            "value": 82,
+            "note": "Lecture 1 正文已读完，附录的系统部分还没看。"
+          },
+          {
+            "label": "Assignment 1 · BPE",
+            "value": 45,
+            "note": "合并循环已跑通，预分词边界还在调。"
+          },
+          {
+            "label": "Assignment 1 · Transformer",
+            "value": 20,
+            "note": "注意力写完，位置编码待补。"
+          },
+          {
+            "label": "自测题正确率",
+            "value": 67,
+            "note": "三个题里错了一个，错在词表大小的权衡。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "w_demo_heatmap",
+      "type": "heatmap",
+      "title": "主题 × 材料覆盖矩阵",
+      "cites": [],
+      "data": {
+        "rows": [
+          "分词",
+          "注意力",
+          "优化器",
+          "系统与效率"
+        ],
+        "columns": [
+          "lecture_01.py",
+          "lecture_01_notes.md",
+          "assignment_1"
+        ],
+        "cells": [
+          [
+            0.92,
+            0.55,
+            0.88
+          ],
+          [
+            0.74,
+            0.81,
+            0.42
+          ],
+          [
+            0.31,
+            0.12,
+            0.66
+          ],
+          [
+            0.58,
+            0.24,
+            0.2
+          ]
+        ],
+        "caption": "颜色越深说明该主题在这份材料里出现得越多；空格用 · 表示。"
+      }
+    },
+    {
+      "id": "w_demo_unknown",
+      "type": "attention_flow",
+      "title": "（刻意未知的类型）",
+      "cites": [],
+      "note": "这个类型不在 protocol.WIDGET_TYPES 里，界面应当降级成可折叠的“未知组件”并保留原始数据，而不是报错。",
+      "data": {
+        "layers": [
+          "layer 1",
+          "layer 2",
+          "layer 3"
+        ],
+        "heads": [
+          "head 1",
+          "head 2",
+          "head 3",
+          "head 4"
+        ],
+        "attention": [
+          [
+            0.2,
+            0.6,
+            0.1,
+            0.1
+          ],
+          [
+            0.05,
+            0.1,
+            0.7,
+            0.15
+          ],
+          [
+            0.3,
+            0.3,
+            0.2,
+            0.2
+          ]
+        ],
+        "note": "未来的新组件类型可以先这样被安全地透传出来。"
+      }
+    }
+  ]
+}
+</script>
+<script type="application/json" id="demo-sources">
+{
+  "sources": [
+    {
+      "id": "src_a01b2c3d4e5f",
+      "path": "lectures/lecture_01.py",
+      "title": "Lecture 1: Overview, Tokenization",
+      "kind": "lecture-note",
+      "bytes": 4210,
+      "added_at": "2026-10-01T09:12:00+0800",
+      "meta": {
+        "line_means": "line",
+        "note": "示例材料：CS336 第 1 讲（中英混排）"
+      },
+      "text": "## 课程定位\n这门课的目标是让你从零实现一个语言模型，而不是调用 API。\n\nWhy did we make this course? 现有课程大多从 NLP 任务出发，\n而这一门从“一个 LM 是怎么被造出来的”出发，五个作业串起来正好是一个完整系统。\n\n关于成本：预训练一个 7B 参数级别的模型，\n公开估算大约需要 10^23 到 10^24 FLOPs。\n换算成消费级 GPU 的时间是以“千年”为单位的，所以本课程的默认路线是\n在 CPU 或单卡上训练小模型，把规模问题当成工程问题来讨论。\n\n## 分词（Tokenization）\n分词器把文本（字符串）映射成整数序列（token ids）。\nLM 从不直接看字符，它看到的永远是 ids，\n所以“模型为什么写错某个字”经常要从分词器这一层找原因。\n\n三种常见粒度：\n- 字符级：词表很小，序列很长，连字母都要单独预测。\n- 字节级：词表恰好 256，任何 Unicode 文本都能被表示，永不 OOV。\n- BPE：从字节出发，反复合并出现频率最高的相邻对，直到命中预设的词表大小。\n\nBPE 的合并依据只有一个：最高频的相邻 token 对（the most common pair of adjacent tokens）。\n它不是按字母序，也不是随机选择；每一步合并都能从语料统计里复现出来。\n\n词表大小的权衡：词表越大，序列越短、训练越省时间，\n但嵌入矩阵（vocab_size × d_model）的参数与内存同步增长。\n实践中 50k ~ 100k 是常见的折中点。\n\n## Transformer 模块\n一个 decoder-only 的 Transformer block 依次包含：\n1. 自注意力（self-attention）：每个位置根据当前上下文动态聚合其他位置的信息，\n   这是它区别于 n-gram 的地方——表示随上下文变化，而不是查一张固定的表。\n2. 多头（multi-head）：多个注意力头在不同子空间里并行做这件事。\n3. 前馈层（FFN）：先升维再降维，逐位置的非线性变换。\n4. 残差连接 + 层归一化（pre-norm），让深网络训得动。\n5. 位置编码：模型本身对顺序不敏感，位置信息必须显式注入。\n\n## 训练\n损失函数是 next-token prediction 的交叉熵：\n    loss = -1/T * sum_t log p(x_t | x_<t)\n优化器通常用 AdamW，前若干步使用 learning rate warmup 再余弦衰减。\n批量大小受显存限制，常配合梯度累积（gradient accumulation）凑出大 batch。\n\n数据管线是：原始文本 → 归一化 → 分词 → 打包成定长序列 → 打乱 → 训练。\n一个容易被低估的事实：训练吞吐往往由数据管线而不是矩阵乘法决定。\n\n## 规模\n参数量决定表达能力，数据量决定泛化：两者都必须足够大。\n常见档位：小模型 1e17 FLOPs 量级，中模型 1e19，大模型 1e22 以上。\n\n系统层面的三件常用工具：激活重计算（activation recomputation）、\n混合精度（bf16/fp16）、以及 FlashAttention 这类 IO 感知的注意力实现。\n\n## 作业\n- assignment 1：实现 BPE 分词器与 Transformer 组件。\n- assignment 2：训练一个完整的小型语言模型。\n\n与 CS224N 的差别：那门课侧重 NLP 任务与应用，\n这门课侧重系统实现与训练动态，看起来更“底层”。\n"
+    },
+    {
+      "id": "src_9f8e7d6c5b4a",
+      "path": "lectures/lecture_01_notes.md",
+      "title": "第 1 讲随堂笔记（BPE 与注意力）",
+      "kind": "markdown",
+      "bytes": 1180,
+      "added_at": "2026-10-01T09:30:00+0800",
+      "meta": {
+        "line_means": "line",
+        "note": "示例材料：随堂笔记"
+      },
+      "text": "# 随堂笔记\n\n自注意力把每个位置表示成其它位置表示的加权和，权重由 query 与 key 的点积决定。\n\n缩放因子 1/sqrt(d_k) 是为了让点积的方差与维度无关；\n去掉它是实验中最常见的“训练不稳定”来源之一。\n\n复杂度：注意力在序列长度上是 O(n^2)，这是长上下文的核心瓶颈。\n\nBPE 落到代码里只有三步：统计相邻对、选最高频、合并。\n真正的工程细节在于预分词（pre-tokenization）与边界处理，\n它决定了 tokenizer 在中文和代码上是否好用。\n"
+    }
+  ]
+}
+</script>
+<div class="app" id="app"></div>
+<script>window.__MENTOR_PREVIEW__ = true;</script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

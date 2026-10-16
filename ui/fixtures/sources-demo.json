@@ -1,0 +1,24 @@
+{
+  "sources": [
+    {
+      "id": "src_a01b2c3d4e5f",
+      "path": "lectures/lecture_01.py",
+      "title": "Lecture 1: Overview, Tokenization",
+      "kind": "lecture-note",
+      "bytes": 4210,
+      "added_at": "2026-10-01T09:12:00+0800",
+      "meta": { "line_means": "line", "note": "示例材料：CS336 第 1 讲（中英混排）" },
+      "text": "## 课程定位\n这门课的目标是让你从零实现一个语言模型，而不是调用 API。\n\nWhy did we make this course? 现有课程大多从 NLP 任务出发，\n而这一门从“一个 LM 是怎么被造出来的”出发，五个作业串起来正好是一个完整系统。\n\n关于成本：预训练一个 7B 参数级别的模型，\n公开估算大约需要 10^23 到 10^24 FLOPs。\n换算成消费级 GPU 的时间是以“千年”为单位的，所以本课程的默认路线是\n在 CPU 或单卡上训练小模型，把规模问题当成工程问题来讨论。\n\n## 分词（Tokenization）\n分词器把文本（字符串）映射成整数序列（token ids）。\nLM 从不直接看字符，它看到的永远是 ids，\n所以“模型为什么写错某个字”经常要从分词器这一层找原因。\n\n三种常见粒度：\n- 字符级：词表很小，序列很长，连字母都要单独预测。\n- 字节级：词表恰好 256，任何 Unicode 文本都能被表示，永不 OOV。\n- BPE：从字节出发，反复合并出现频率最高的相邻对，直到命中预设的词表大小。\n\nBPE 的合并依据只有一个：最高频的相邻 token 对（the most common pair of adjacent tokens）。\n它不是按字母序，也不是随机选择；每一步合并都能从语料统计里复现出来。\n\n词表大小的权衡：词表越大，序列越短、训练越省时间，\n但嵌入矩阵（vocab_size × d_model）的参数与内存同步增长。\n实践中 50k ~ 100k 是常见的折中点。\n\n## Transformer 模块\n一个 decoder-only 的 Transformer block 依次包含：\n1. 自注意力（self-attention）：每个位置根据当前上下文动态聚合其他位置的信息，\n   这是它区别于 n-gram 的地方——表示随上下文变化，而不是查一张固定的表。\n2. 多头（multi-head）：多个注意力头在不同子空间里并行做这件事。\n3. 前馈层（FFN）：先升维再降维，逐位置的非线性变换。\n4. 残差连接 + 层归一化（pre-norm），让深网络训得动。\n5. 位置编码：模型本身对顺序不敏感，位置信息必须显式注入。\n\n## 训练\n损失函数是 next-token prediction 的交叉熵：\n    loss = -1/T * sum_t log p(x_t | x_<t)\n优化器通常用 AdamW，前若干步使用 learning rate warmup 再余弦衰减。\n批量大小受显存限制，常配合梯度累积（gradient accumulation）凑出大 batch。\n\n数据管线是：原始文本 → 归一化 → 分词 → 打包成定长序列 → 打乱 → 训练。\n一个容易被低估的事实：训练吞吐往往由数据管线而不是矩阵乘法决定。\n\n## 规模\n参数量决定表达能力，数据量决定泛化：两者都必须足够大。\n常见档位：小模型 1e17 FLOPs 量级，中模型 1e19，大模型 1e22 以上。\n\n系统层面的三件常用工具：激活重计算（activation recomputation）、\n混合精度（bf16/fp16）、以及 FlashAttention 这类 IO 感知的注意力实现。\n\n## 作业\n- assignment 1：实现 BPE 分词器与 Transformer 组件。\n- assignment 2：训练一个完整的小型语言模型。\n\n与 CS224N 的差别：那门课侧重 NLP 任务与应用，\n这门课侧重系统实现与训练动态，看起来更“底层”。\n"
+    },
+    {
+      "id": "src_9f8e7d6c5b4a",
+      "path": "lectures/lecture_01_notes.md",
+      "title": "第 1 讲随堂笔记（BPE 与注意力）",
+      "kind": "markdown",
+      "bytes": 1180,
+      "added_at": "2026-10-01T09:30:00+0800",
+      "meta": { "line_means": "line", "note": "示例材料：随堂笔记" },
+      "text": "# 随堂笔记\n\n自注意力把每个位置表示成其它位置表示的加权和，权重由 query 与 key 的点积决定。\n\n缩放因子 1/sqrt(d_k) 是为了让点积的方差与维度无关；\n去掉它是实验中最常见的“训练不稳定”来源之一。\n\n复杂度：注意力在序列长度上是 O(n^2)，这是长上下文的核心瓶颈。\n\nBPE 落到代码里只有三步：统计相邻对、选最高频、合并。\n真正的工程细节在于预分词（pre-tokenization）与边界处理，\n它决定了 tokenizer 在中文和代码上是否好用。\n"
+    }
+  ]
+}
