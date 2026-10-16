@@ -607,6 +607,27 @@ def check_decisions(chrome: "cdp.Chrome", base: str, label: str,
                 problems.append(f"{tag}: 窄屏方案没有用 420px 的窄窗口（{data.get('frames')}）")
         if shots is not None:
             chrome.screenshot(sid, shots / f"decision-{name}.png")
+
+    # 展示会话独立做的决策页也纳入验收。它不归生成器管，但用户要在这页拍板，所以不能是坏的。
+    for name in ("d-motion-and-marks",):
+        sid = chrome.new_page(1440, 1000)
+        chrome.goto(sid, f"{base}/docs/decisions/{name}.html")
+        time.sleep(0.7)
+        data = chrome.evaluate(sid, DECISIONS_JS) or {}
+        print(f"  {name}: 变体 {data.get('variants')}｜横向溢出 {data.get('overflow')}")
+        tag = f"decisions/{name}"
+        if data.get("errors"):
+            problems.append(f"{tag}: 页面有未捕获错误 {data['errors']}")
+        if data.get("overflow"):
+            problems.append(f"{tag}: 页面横向溢出 {data['overflow']}px")
+        if (data.get("variants") or 0) < 3:
+            problems.append(f"{tag}: 变体只有 {data.get('variants')} 个，动效三选一没渲染全")
+        # D-5 与决策 B 重复：页面里必须有指向 B 的合流说明，免得用户被问两次
+        merged = chrome.evaluate(sid, "document.body.innerHTML.includes('b-visual-language.html')")
+        if not merged:
+            problems.append(f"{tag}: 缺少与决策 B 的合流指路（D-5 与 B 是同一题）")
+        if shots is not None:
+            chrome.screenshot(sid, shots / f"decision-{name}.png")
     return problems
 
 

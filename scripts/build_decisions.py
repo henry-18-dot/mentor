@@ -400,7 +400,9 @@ def build_b() -> str:
     body.append('<div class="verdict"><b>我的建议：B2（先不动纸面颜色）。</b>'
                 '"边缘色条是 AI 标志"这条来自一手 skill，值得信；但"暖白纸面"是 mentor 现有的性格，'
                 '而 Anthropic 那条规则是为 PPT 写的（投影环境与屏幕阅读不是一回事）。'
-                '所以先做 B2 去掉条纹，纸面颜色留到你看过真实渲染再定。</div>')
+                '所以先做 B2 去掉条纹，纸面颜色留到你看过真实渲染再定。<br>'
+                '<b>注</b>：展示会话的决策页 D 里有一段「D-5 四处单边色条」，与本题是同一件事 —— '
+                '那边已加指路，<b>色条只在这里选一次</b>。</div>')
     body.append(how_to_choose())
     body.append(NAV)
     return page("决策 B · 视觉语言", "".join(body))
@@ -465,21 +467,29 @@ def build_c() -> str:
 # 索引
 # --------------------------------------------------------------------------
 def build_index() -> str:
-    body = ['<p class="kicker">mentor · 审美决策</p><h1>三个决策，请你在页面上选</h1>',
+    body = ['<p class="kicker">mentor · 审美决策</p><h1>四个决策，请你在页面上选</h1>',
             '<p class="lede">这些都是"改了会看得见"的选择，所以按约定先出页、不动代码。'
-            '页里的每个方案都用 mentor **真实的 CSS 令牌与组件类**渲染（不是示意图），'
+            '页里的每个方案都用 mentor <b>真实的 CSS 令牌与组件类</b>渲染（不是示意图），'
             '所以你在页上看到的就是实现后的样子（同一屏宽下）。</p>',
             table(["决策", "在选什么", "依据", "打开"], [
                 ["<b>A</b> 排版", "阅读列宽 / 段距 / 字号阶梯", "WCAG 1.4.8 实测 + Anthropic pptx skill 的排版原则",
                  '<a href="a-typography.html">a-typography.html</a>'],
                 ["<b>B</b> 视觉语言", "4 处边缘色条去留 / 纸面底色", "Anthropic pptx skill："
-                                                                  '"边缘色条是 AI 生成的标志"',
+                                                                  '「边缘色条是 AI 生成的标志」',
                  '<a href="b-visual-language.html">b-visual-language.html</a>'],
                 ["<b>C</b> 结构", "正文优先级 / aside 默认收起 / 窄屏两栏", "P4 三项结构性方向（此前一直等你拍板）",
                  '<a href="c-structure.html">c-structure.html</a>'],
+                ["<b>D</b> 动效节奏", "组件入场：逐个 40ms / 收敛 / 一次性同帧",
+                 "现场测量：最长帧 42.2/68.9ms、掉帧 0/4、99.7% 落在同一垂直同步内",
+                 '<a href="d-motion-and-marks.html">d-motion-and-marks.html</a>'],
             ]),
+            '<h2>两处重叠，已经合并</h2>',
+            '<div class="how">展示会话独立做的决策页 D 里有一段 <b>D-5 四处单边色条</b>，'
+            '与这里的 <b>B</b> 是同一题。已合并：<b>色条只在这页选一次（B）</b>，'
+            'D 页那一段保留为"四处逐个对照"的参考，并在页首加了指路。'
+            'D 页独有的 <b>D-4 入场节奏</b> 仍在那里选（它带<b>可重播</b>的三个节奏，静态页做不出来）。</div>',
             '<h2>怎么回我</h2>',
-            '<div class="how">直接把选择回给我即可，例如 <code>A3 / B2 / C2</code>；'
+            '<div class="how">直接把选择回给我即可，例如 <code>A3 / B2 / C2 / D4-B</code>；'
             '带条件也行（"B2，但条纹只保留命中行"、"A2 但要先看真实效果"）。'
             '你给完，我按选择改代码 + 同步验收断言，并把结论回写进 <code>docs/overnight-log.md</code>。</div>',
             '<h2>这些建议是哪来的</h2>',
