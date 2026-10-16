@@ -85,6 +85,27 @@
 
 ## 轮次记录
 
+### 第 33 轮 验证 DSH 客户端插件能否热重载（用户提问）
+- 问题：用户已装上 `dsh-reading-stability`，问"想改的话是热重载吗"。
+- 机制（实测）：客户端插件不是单独发的，而是被**内联进一个合并 bundle**
+  （`/plugins/??@deepseek-ai/…,dsh-reading-stability/client.js&rev=<hash>`，约 60 个插件合成一份，
+  10.4 MB）；`rev` 由**内容/改动**决定而不是启动时定死。
+- 实验（隔离实例，真浏览器）：
+  1. 在 `lib/client.js` 与 `src/client.js` 里各插一行 `'--dsh-rs-probe': 'reload-test'`；
+  2. 抓服务器**当前**发出的那个 bundle：`servedHasProbe=true`，且 `rev` 从 `ad440759649d`
+     变成 `603023fb6ab4` —— 说明合并 bundle 是**按请求重建**的，改文件不需要重启；
+  3. 新开页面（等于 F5）：令牌数 15 → **16**，`--dsh-rs-probe: reload-test` 出现；
+  4. **不刷新**页面、把探针值改成 `hmr-test`：**第 1 秒**页面上的值就自动变成 `hmr-test` → 真·热重载；
+  5. 还原文件后，打开着的页面也自动回到 15 个令牌、探针为空（反向也自动生效）。
+- 收尾：两个文件哈希回到基线 `C32C7A74F9B58CF3`，插件自带校验 `node scripts/check-bundle.mjs`
+  **51 PASS / 0 FAIL**（探针在时也是 51 PASS，因为两个文件同步改）。
+- 结论与边界：**客户端半边热重载（≈1 秒，无需刷新/重启）**；但——
+  - **host 半边 `lib/index.js` 是 node 侧**，改动需要重启后端；
+  - **增删插件 / 改 `cordis.patch.yml`** 属于注册变更，仍要"安装 + 重启"（desktop profile 由 Electron 独占）；
+  - 源码真源是 `lib/client.js`，`src/client.js` 必须逐字一致（`npm run sync:client`），改完跑
+    `node scripts/check-bundle.mjs`（51 条断言，退出码即结论）。
+  - 用户桌面版通过 `link:` 指向**同一个项目目录**，所以结论同样适用；万一没看到，刷新一次页面即强制取新 `rev`。
+
 ### 第 32 轮 安装 `dsh-reading-stability`（用户指令「装」）
 - 走它自己 `docs/INSTALL.md` 里那条**不碰 `~/.dsh`、不碰正在跑的进程**的路径：
   `tools/dsh-test-instance.ps1 install <插件绝对路径>` → `boot -Port 19390`（DSH_HOME 隔离到
