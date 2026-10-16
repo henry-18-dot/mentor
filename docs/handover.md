@@ -6,7 +6,7 @@
 
 - 协议版本：`PROTOCOL_VERSION = "0.1"`（`mentor/protocol.py`）
 - 组件类型：**17** 种；槽位：**4** 类（primary / support / evidence / aside）
-- 测试：**341** 条，`python -m unittest discover -s tests -t .` 全绿
+- 测试：**345** 条，`python -m unittest discover -s tests -t .` 全绿
 - 界面验收：`python scripts/accept_ui.py` 全绿。配色与视口的实际组合：**index 页两种配色 × 两种视口都跑；
   interactive 轮两种配色只在 1440 跑，390 只跑第一种配色**（结论与配色无关，省一半时间）。
 - 规模：核心代码 42 个文件 ≈ **12,946 行**（`mentor/*.py` + `mentor/llm/*.py` + `ui/*.js|css` + `scripts/*.py` + `tests/*.py`）
@@ -46,12 +46,17 @@ python -m mentor.cli serve --port 8484            # 打开 http://127.0.0.1:8484
 
 | 命令 | 覆盖什么 | 期望 |
 |---|---|---|
-| `python -m unittest discover -s tests -t .` | 333 条（24 个测试文件）：切块与行号、PDF 载荷往返、检索、接地、流式协议、服务端、SSE、静态安全、导出、追问、轮次历史、配置诚实性、CLI 边界、材料展开、性能护栏 | `OK` |
-| `python scripts/accept_ui.py` | 真浏览器（CDP）交互 + DOM 断言 + 排版/配色度量 + 样式证据 | 结论 `✓ 主路径通过` |
+| `python -m unittest discover -s tests -t .` | **345 条**（25 个测试文件）：切块与行号、PDF 载荷往返、检索、接地、流式协议、服务端、SSE、静态安全、导出、追问、轮次历史、配置诚实性、CLI 边界、材料展开、性能护栏、**笔记本次序确定性** | `OK` |
+| `python scripts/accept_ui.py` | 真浏览器（CDP）交互 + DOM 断言 + 排版/配色度量 + 样式证据 + **十类**检查（`--case index\|interactive\|pdf\|hostile\|decisions\|all`） | 结论 `✓ 主路径通过` |
+| `python scripts/mutation_check.py` | **证明回归测试真的抓得住 bug**：把 `mentor/`+`tests/` 复制到临时目录，在副本里去掉 `rowid` 兜底，跑目标测试 —— 必须 FAILED 才算守卫有效；**主树只读，脚本前后自证哈希未变** | 退出码 0 |
 | `python scripts/bench.py` | 索引与问答耗时 | 写入 `runs/bench.md` |
 | `python scripts/smoke.py` | 最小端到端冒烟 | 退出码 0 |
 
-`scripts/accept_ui.py` 的**九类**检查**互不替代**（改哪一层就有一类会红）：
+> **纪律**：不要在实况树上"临时改坏再还原"来做反向验证 —— 2026-10-17 有一次这样做，
+> 正好撞上另一个会话在同一棵树上取证（约 4 秒窗口），差点污染它的证据。
+> 用 `scripts/mutation_check.py`（临时副本）或 `unittest.mock.patch`，都可达到同样效果而不碰主树。
+
+`scripts/accept_ui.py` 的**十类**检查**互不替代**（改哪一层就有一类会红）：
 
 1. **交互**（`ui/self-test.html` 用真实事件走完整路径）：选模式 → 输入 → 发送 → 等组件流 →
    点引用 → 右栏跳行 → 搜索命中词行内高亮 → 悬停引用出预览 → `j/k/Enter` 键盘导航 →
