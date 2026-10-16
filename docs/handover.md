@@ -1,5 +1,7 @@
 # mentor 交付说明（handover）
 
+仓库：**https://github.com/henry-18-dot/mentor**（公开，默认分支 `main`）
+
 面向"接手这份代码的人"。每条结论都对应一条可跑的命令或一个测试文件，凡是没证据的说法都不写。
 
 - 协议版本：`PROTOCOL_VERSION = "0.1"`（`mentor/protocol.py`）

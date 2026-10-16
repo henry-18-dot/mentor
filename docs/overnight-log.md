@@ -65,6 +65,24 @@
 
 ## 轮次记录
 
+### 第 30 轮 上传 GitHub（用户指令）
+- 本机状况：`git` 2.51.2 有；`gh` **没装**；`winget` 不可用；全局 git 身份是 `henry-18-dot`；
+  系统级 `credential.helper=manager`（凭证管理器里有 github.com 条目）；无 `GITHUB_TOKEN`。
+- 做法：
+  1. **提交前先审计**（这类操作不可逆，先看清再动手）：`git init` + 暂存后核对 —— 索引里
+     **76 个文件 / 2.27 MB**；`config.json`、`data/*.db`、`runs/**` 经 `git check-ignore` 确认被忽略；
+     用 `git grep --cached` 扫密钥模式（`sk-`/`ghp_`/`AKIA`/`Bearer`/私钥头）**零命中**。
+  2. 提交 `c90f395`（76 个文件，工作区干净）。
+  3. 按用户选择：下载 gh 便携包（v2.102.0，装到 `%LOCALAPPDATA%\gh-cli`，不需管理员）→
+     设备码流程登录（用户在浏览器授权一次，token 存进系统钥匙串，**没有经过对话记录**）→
+     `gh repo create mentor --public --source . --push`。
+- 核验（都做完了）：仓库 **PUBLIC**、默认分支 `main`、`createdAt 2026-10-16T01:31:35Z`；
+  本地 HEAD 与 `origin/main` 同为 `c90f395`；远端文件数 **76**（与本地一致）；
+  `config.json`/`data/`/`runs/`/`*.db`/`*.pyc` **确实都不在远端**；最大文件 `ui/hostile.html` 1.46 MB（生成物）；
+  已加 topic；最后用 `web_fetch` 做**外部验证**：`https://github.com/henry-18-dot/mentor` 返回 HTTP 200，
+  标题即仓库描述。
+- 结果：**https://github.com/henry-18-dot/mentor**
+
 ### 第 29 轮 整晚收尾复核（低谷窗口结束前的最终确认）
 - 目的：整晚改了 20+ 处（含 15 个真缺陷修复），确认交付物**仍然自洽**，不靠记忆下结论。
 - 全套复核（都是当场跑的，不是回述）：
