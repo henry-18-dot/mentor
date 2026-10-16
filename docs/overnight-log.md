@@ -68,7 +68,7 @@
 - [x] **先例调研（已完成：`docs/prior-art.md`）**：读 Anthropic `pptx` skill 的版式/层级做法、`dsh-replica` 的
   设计令牌与壳体结构、`dsh-reading-stability/docs/prior-art.md`，产出一份
   `docs/prior-art.md`（每条：来源链接 + 借什么思想 + 怎么落到 mentor + 代价）。
-- [ ] **`dsh-reading-stability` 安装确认**（用户问过"为什么没看到"）：它已建好但**未注册进 desktop
+- [x] **`dsh-reading-stability` 安装确认（隔离实例已装并验证；真机待 GUI 一步 + 重启）**（用户问过"为什么没看到"）：它已建好但**未注册进 desktop
   profile**（当前 bundles 只有 base / web-app / agent-team / schedule / session-bus）。
   按它自己 `docs/INSTALL.md`：桌面版只能走**应用内的插件页**添加（命令行会被 Electron 独占拒绝）。
   待用户决定是否今晚装（装法：左侧栏 → 插件 → 添加插件 → 粘贴
@@ -84,6 +84,26 @@
   验收：6 条接口测试 + 自检 2 条断言（见第 16 轮）。
 
 ## 轮次记录
+
+### 第 32 轮 安装 `dsh-reading-stability`（用户指令「装」）
+- 走它自己 `docs/INSTALL.md` 里那条**不碰 `~/.dsh`、不碰正在跑的进程**的路径：
+  `tools/dsh-test-instance.ps1 install <插件绝对路径>` → `boot -Port 19390`（DSH_HOME 隔离到
+  `%TEMP%\dsh-scratch-home`）。
+- 安装结果（隔离 profile `web`）：`dependencies` 里出现
+  `"dsh-reading-stability": "link:C:/.../projects/dsh-reading-stability"`，`dsh.profile.bundles` 里也加上了它，
+  `node_modules/dsh-reading-stability` 是指向项目的符号链接。
+- **真浏览器验证三项生效证据**（无头 Chrome 打开带 token 的真实 GUI）：
+  `hasBoot=true`、`bodyClass="dsh-reading-stability"`、`<style data-plugin="dsh-reading-stability">` 存在、
+  内联 `--dsh-rs-*` 令牌 **15 个**（与 INSTALL.md 的预期数字一致，样例含
+  `--dsh-rs-delta=min(calc(var(--dsh-content-font-size,14px) - 14px), …)`）。截图
+  `runs/ui/dsh-instance-plugin.png`（真实 GUI：左侧「插件/工作区/设置」）。
+  （我另外探的 `script[src]` 里没有它——那是探针写错了：它进启动图是动态 import，不是 script 标签。）
+- **真机（desktop profile）还没装**：`dsh plugin --profile desktop add` 会被 Electron 拒绝
+  （"profile desktop is managed exclusively by the Electron application"），必须走应用内
+  插件页 → 添加插件 → 粘贴 `C:\Users\Henry_1\Documents\deepseek-harness\default-workspace\projects\dsh-reading-stability`
+  → 安装 → **重启应用**（客户端插件在启动时进图）。重启会结束当前会话的运行，但会话记录保留、可恢复。
+- 收尾：隔离实例仍在 `http://127.0.0.1:19390/?token=…` 跑着，用户可自查；用完 `tools/dsh-test-instance.ps1 clean`
+  可整个删掉（只删 `%TEMP%\dsh-scratch-home`）。
 
 ### 第 31 轮 先例调研 + 审美决策页（用户新规则的第一轮）
 - 用户 2026-10-16 上午新增两条规则（已写进「自律规则」第 5、6 条）：**重大审美决策先出展示页**、
