@@ -11,7 +11,16 @@
 3. **模型自述不算证据**：Kimi/deepseek-flash 说"有/没有"的地方，都要用计算样式、DOM 断言或截图复核。
    （已踩过：k3 说 6 条没修好，实测 4 条是它看错——它拿到的是下采样图。）
 4. **结构性方向不擅改**（等用户拍板）：正文与讲义代码的视觉优先级、默认收起 aside 类组件、三栏是否该减栏。
-5. 每轮往本文件追加一段：轮次 / 改了什么 / 证据 / 下一项。
+5. **重大审美决策一律先做"展示页"**（2026-10-16 用户新要求）：凡是要改变观感/交互结构的选择，
+   不要只在对话里描述或直接实现 —— 生成一个**可离线打开的决策页**（同屏对比 2~3 个方案、
+   标注各自的取舍与代价、写明"选它会发生什么"），让用户**在页面上选**并在那里留修改意见。
+   决策落定后再进实现轮次，并把结论回写进本台账。参考形态：`ui/preview.html` 那种零依赖、双击即开的单页。
+6. **借鉴已有优秀实践是一项基本工程**（同上）：多去 GitHub / 公开资料看现成的审美与 UI 配置，
+   不闭门造车。已知值得先挖的：**Anthropic 公开的 PPT Skill**（`pptx`，版式与信息层级思想）、
+   本机 `~/Documents/deepseek-harness/default-workspace/projects/dsh-replica`（DSH Web UI 的复刻 +
+   设计令牌审计）与 `dsh-reading-stability/docs/prior-art.md`（29KB 的先例调研）。
+   借用时**标注来源**，并说明借了什么思想、为什么适配 mentor。
+7. 每轮往本文件追加一段：轮次 / 改了什么 / 证据 / 下一项。
 
 ## 优先级队列
 
@@ -53,6 +62,17 @@
 - 正文/讲义代码的视觉优先级最高（CC 总评）；是否默认收起 `aside` 组件；三栏是否在窄屏变两栏。
 
 ### 新队列（P4 之外，可验收、非结构性；P1–P3 已清空后启用）
+- [ ] **审美决策页（今晚第一件事）**：把 P4 三条 + 现有观感的候选方案做成 `runs/decisions/*.html`
+  决策页（每页同屏对比 2~3 方案、标取舍、可离线打开），请用户在页面上选；
+  选完再改代码，并同步更新验收断言。**不要先改后问。**
+- [ ] **先例调研（borrow prior art）**：读 Anthropic `pptx` skill 的版式/层级做法、`dsh-replica` 的
+  设计令牌与壳体结构、`dsh-reading-stability/docs/prior-art.md`，产出一份
+  `docs/prior-art.md`（每条：来源链接 + 借什么思想 + 怎么落到 mentor + 代价）。
+- [ ] **`dsh-reading-stability` 安装确认**（用户问过"为什么没看到"）：它已建好但**未注册进 desktop
+  profile**（当前 bundles 只有 base / web-app / agent-team / schedule / session-bus）。
+  按它自己 `docs/INSTALL.md`：桌面版只能走**应用内的插件页**添加（命令行会被 Electron 独占拒绝）。
+  待用户决定是否今晚装（装法：左侧栏 → 插件 → 添加插件 → 粘贴
+  `C:\Users\Henry_1\Documents\deepseek-harness\default-workspace\projects\dsh-reading-stability`）。
 - [x] **引用悬停预览**：chip 上带 `data-cite-locator/title/quote`，`app.js` 用事件代理（mouseover/focusin）
   在 chip 旁弹出预览卡（含行号、标题、原文片段、"点击打开原文"提示），移开/滚动/Esc 收起；
   卡片 `pointer-events:none` 以免吃掉 hover。验收：交互自检两条断言（见第 14 轮）。
