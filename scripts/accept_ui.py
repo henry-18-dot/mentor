@@ -420,17 +420,29 @@ CONTRAST_JS = """(() => {
   ];
   const out = [];
   targets.forEach(([name, sel]) => {
-    const node = document.querySelector(sel);
-    if (!node || !node.getClientRects().length) return;
-    const style = getComputedStyle(node);
-    const fg = parse(style.color);
-    if (!fg) return;
-    const bg = effectiveBg(node);
-    const size = parseFloat(style.fontSize) || 16;
-    const bold = (parseInt(style.fontWeight, 10) || 400) >= 700;
-    const large = size >= 24 || (bold && size >= 18.66);
-    const value = ratio(over(fg, bg), bg);
-    out.push({ name, sel, ratio: Math.round(value * 100) / 100, size, need: large ? 3 : 4.5 });
+    // 取**所有**匹配元素里对比度最差的那个，而不是第一个匹配。
+    // 由来（2026-10-17 协作会话撞出来的）：原来用 querySelector 取首个匹配，
+    // 于是"右栏行号"量到的是命中行还是普通行取决于当时的 DOM 状态 ——
+    // 同一份代码两次运行得到 7.29:1 与 8.86:1 两个值，谁也复现不了对方。
+    // 审计的断言是"最低 X:1"，就必须是**所有匹配元素的下界**，否则这个数不可比。
+    const nodes = [...document.querySelectorAll(sel)].filter((n) => n.getClientRects().length);
+    if (!nodes.length) return;
+    let worst = null;
+    nodes.forEach((node) => {
+      const style = getComputedStyle(node);
+      const fg = parse(style.color);
+      if (!fg) return;
+      const bg = effectiveBg(node);
+      const size = parseFloat(style.fontSize) || 16;
+      const bold = (parseInt(style.fontWeight, 10) || 400) >= 700;
+      const large = size >= 24 || (bold && size >= 18.66);
+      const value = Math.round(ratio(over(fg, bg), bg) * 100) / 100;
+      if (!worst || value < worst.ratio) {
+        worst = { name, sel, ratio: value, size, need: large ? 3 : 4.5,
+                  nodes: nodes.length, state: node.className || "(无类)" };
+      }
+    });
+    if (worst) out.push(worst);
   });
   const bodyBg = parse(getComputedStyle(document.body).backgroundColor);
   return { pairs: out, background: bodyBg, scheme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' };
@@ -445,10 +457,13 @@ def contrast_audit(chrome: "cdp.Chrome", sid: str, label: str) -> list[str]:
     print(f"\n== {label} 对比度（{data.get('scheme')} 配色）==")
     for item in pairs:
         mark = "✓" if item["ratio"] >= item["need"] else "✗"
-        print(f"  {mark} {item['name']:<10} {item['ratio']:>5}:1（需 {item['need']}，{item['size']}px）")
+        # 打出"取的是哪个状态、共几个匹配元素"：这个数原来会随 DOM 状态漂移，标出来才能复现
+        state = item.get("state", "")
+        more = f"｜{item.get('nodes', 1)} 个匹配里取最差（{state}）" if item.get("nodes", 1) > 1 else ""
+        print(f"  {mark} {item['name']:<10} {item['ratio']:>5}:1（需 {item['need']}，{item['size']}px）{more}")
         if item["ratio"] < item["need"]:
             problems.append(f"{label}: {item['name']} 对比度 {item['ratio']}:1 < {item['need']}"
-                            f"（{item['sel']}，{item['size']}px）")
+                            f"（{item['sel']}，{item['size']}px，状态 {state}）")
     if not pairs:
         problems.append(f"{label}: 对比度审计没采到任何可见元素")
     return problems
